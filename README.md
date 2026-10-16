@@ -6,6 +6,7 @@
 A side-by-side, word-level visual diff of compiled PDFs, with changes highlighted in red and green.
 
 [![CI](https://github.com/stormaref/redlatex/actions/workflows/ci.yml/badge.svg)](https://github.com/stormaref/redlatex/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/redlatex.svg)](https://pypi.org/project/redlatex/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 ![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)
 
@@ -64,7 +65,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: stormaref/redlatex@main
+      - uses: stormaref/redlatex@v0.2.0
         with:
           tex: main.tex       # path of the main file
 ```
@@ -92,9 +93,8 @@ Requirements: Python 3.10+, [uv](https://docs.astral.sh/uv/), and, to compile fr
 TeX distribution with `latexmk`.
 
 ```bash
-uvx --from git+https://github.com/stormaref/redlatex redlatex --help   # run without installing
-# or
-git clone https://github.com/stormaref/redlatex && cd redlatex && uv sync
+uvx redlatex --help          # run without installing
+pip install redlatex         # or install it
 ```
 
 Run it from the root of the git repository that holds your LaTeX project (or pass `--repo`):
