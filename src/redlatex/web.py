@@ -52,7 +52,18 @@ app.mount('/static', StaticFiles(directory=STATIC), name='static')
 
 # absolute URL of the site, for link previews (Open Graph / Twitter cards need absolute image URLs)
 PUBLIC_URL = os.environ.get('REDLATEX_PUBLIC_URL', 'https://redlatex.onrender.com').rstrip('/')
-PAGE = (Path(__file__).parent / 'index.html').read_text().replace('{{BASE}}', PUBLIC_URL)
+
+
+def _versioned(html):
+    """Add a content hash to every /static/ URL, so browsers and link-preview caches pick up changed files
+    at once while unchanged ones stay cached."""
+    def tag(m):
+        f = STATIC / m.group(1)
+        return f'{m.group(0)}?v={hashlib.sha256(f.read_bytes()).hexdigest()[:10]}' if f.is_file() else m.group(0)
+    return re.sub(r'/static/([A-Za-z0-9._-]+)', tag, html)
+
+
+PAGE = _versioned((Path(__file__).parent / 'index.html').read_text().replace('{{BASE}}', PUBLIC_URL))
 
 
 def _hashes(tag):
@@ -88,9 +99,10 @@ async def guard(request: Request, call_next):
     response.headers.update(HEADERS)
     path = request.url.path
     if path.startswith('/static/') or path in ('/favicon.ico', '/apple-touch-icon.png'):
-        response.headers.setdefault('Cache-Control', 'public, max-age=86400')
+        response.headers.setdefault('Cache-Control', 'public, max-age=604800' if request.url.query else 'public, max-age=3600')
     if path == '/':
         response.headers['Content-Security-Policy'] = PAGE_CSP
+        response.headers['Cache-Control'] = 'no-cache'
     else:
         response.headers['Content-Security-Policy'] = "default-src 'none'; frame-ancestors 'none'"
     return response

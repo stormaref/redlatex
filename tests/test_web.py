@@ -198,7 +198,7 @@ def test_link_preview_meta_and_static_assets():
     html = client.get('/').text
     assert '{{BASE}}' not in html
     og = _re.search(r'<meta property="og:image" content="([^"]+)"', html).group(1)
-    assert og.startswith('https://') and og.endswith('/static/og.png')
+    assert og.startswith('https://') and '/static/og.png?v=' in og
     for tag in ('og:title', 'og:description', 'og:url', 'twitter:card', 'twitter:image'):
         assert tag in html
     for path in ['/static/og.png', '/static/feat-words.png', '/static/sample-diff.pdf', '/favicon.ico',
@@ -207,4 +207,4 @@ def test_link_preview_meta_and_static_assets():
         assert r.status_code == 200, path
     assert 'max-age' in client.get('/static/og.png').headers['cache-control']
     imgs = _re.findall(r'src="(/static/[^"]+)"', html)
-    assert imgs and all(client.get(i).status_code == 200 for i in imgs)
+    assert imgs and all('?v=' in i and client.get(i).status_code == 200 for i in imgs)
