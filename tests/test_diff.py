@@ -1,6 +1,6 @@
 import pymupdf
 
-from pdf_revision_diff.cli import main
+from redlatex.cli import main
 
 OLD = ["The quick brown fox jumps over the lazy dog. " * 12,
        "A second paragraph that stays exactly the same in both versions of the document. " * 6]

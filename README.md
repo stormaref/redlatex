@@ -1,4 +1,4 @@
-# pdf-revision-diff
+# redlatex
 
 Render a side-by-side, word-level visual diff of two compiled versions of a LaTeX document.
 
@@ -18,8 +18,8 @@ it carries a bookmark per section.
 ## Install
 
 ```
-git clone <this repository> pdf-revision-diff
-cd pdf-revision-diff
+git clone <this repository> redlatex
+cd redlatex
 uv sync
 ```
 
@@ -30,16 +30,16 @@ tool's own directory, point uv at it with `--project`:
 
 ```
 # compare a tagged revision with HEAD
-uv run pdf-revision-diff --old v1 --new HEAD
+uv run redlatex --old v1 --new HEAD
 
 # compare HEAD with the working tree (the default), main file in a subfolder
-uv run pdf-revision-diff --tex paper/main.tex --out changes.pdf
+uv run redlatex --tex paper/main.tex --out changes.pdf
 
 # compare two PDFs directly (no git, no latexmk)
-uv run pdf-revision-diff --old-pdf before.pdf --new-pdf after.pdf
+uv run redlatex --old-pdf before.pdf --new-pdf after.pdf
 
 # run against another repository
-uv run --project /path/to/pdf-revision-diff pdf-revision-diff --repo /path/to/paper --old v1
+uv run --project /path/to/redlatex redlatex --repo /path/to/paper --old v1
 ```
 
 | Option | Default | Meaning |
@@ -56,6 +56,35 @@ uv run --project /path/to/pdf-revision-diff pdf-revision-diff --repo /path/to/pa
 Revisions are compiled with `latexmk -pdf` in temporary directories; a revision is exported with
 `git archive`, and the working tree is compiled in place with build files sent to a temporary directory,
 so the repository is not modified.
+
+## Web app
+
+`redlatex.web` serves a small upload page: choose the earlier and the revised version of a LaTeX project as
+`.zip` files (the main `.tex` file is auto-detected, or name it) and download the diff PDF.
+
+```
+uv sync --extra web
+uv run uvicorn redlatex.web:app
+```
+
+Or with Docker (includes a TeX Live install):
+
+```
+docker build -t redlatex .
+docker run -p 10000:10000 redlatex
+```
+
+Uploads are size-limited, unpacked with path checks, compiled with shell escape off and TeX file access
+restricted to the project (`openin_any=p`), and deleted after the response.
+
+### Deploying to Render
+
+1. Create a Render web service from this repository (`render.yaml` is a ready blueprint; Docker runtime).
+2. In the service settings, copy the **Deploy Hook** URL.
+3. In the GitHub repository, add it as the secret `RENDER_DEPLOY_HOOK_URL`.
+
+`ci.yml` runs the tests and builds the image on every push and pull request; `deploy.yml` triggers the
+Render deploy after CI succeeds on `main`.
 
 ## How the matching works
 

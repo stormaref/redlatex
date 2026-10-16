@@ -1,0 +1,8 @@
+services:
+  - type: web
+    name: redlatex
+    runtime: docker
+    plan: starter        # compiling LaTeX needs more than the free tier's 512 MB
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /healthz
+    autoDeploy: false    # deployed by the GitHub Action via deploy hook

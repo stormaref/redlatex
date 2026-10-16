@@ -33,6 +33,22 @@ def source(repo, tex, rev):
         return None
 
 
+def compile_tree(root, tex, out, timeout=None):
+    """Compile `tex` (relative to the source tree `root`) with latexmk into `out`; return the PDF path."""
+    tex_path = Path(tex)
+    out.mkdir(parents=True, exist_ok=True)
+    cmd = ['latexmk', '-pdf', '-interaction=nonstopmode', '-no-shell-escape', f'-outdir={out}', tex_path.name]
+    try:
+        subprocess.run(cmd, cwd=root / tex_path.parent, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                       stderr=subprocess.DEVNULL, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        raise SystemExit(f'compiling {tex} timed out after {timeout}s')
+    pdf = out / tex_path.with_suffix('.pdf').name
+    if not pdf.exists():
+        raise SystemExit(f'compiling {tex} failed; see {pdf.with_suffix(".log")}')
+    return pdf
+
+
 def compile_rev(repo, tex, rev, work):
     """Compile the main .tex file of a revision (or the working tree) and return the PDF path."""
     tex_path = Path(tex)

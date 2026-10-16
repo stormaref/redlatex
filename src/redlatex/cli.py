@@ -1,4 +1,4 @@
-"""Command-line interface of pdf-revision-diff."""
+"""Command-line interface of redlatex."""
 import argparse
 import tempfile
 from pathlib import Path
@@ -7,14 +7,14 @@ from .build import WORKTREE, compile_rev, describe, source
 from .diff import render
 
 EPILOG = """examples:
-  pdf-revision-diff --old v1 --new HEAD
-  pdf-revision-diff --old-pdf before.pdf --new-pdf after.pdf --out changes.pdf
-  pdf-revision-diff                       # HEAD against the working tree
+  redlatex --old v1 --new HEAD
+  redlatex --old-pdf before.pdf --new-pdf after.pdf --out changes.pdf
+  redlatex                       # HEAD against the working tree
 """
 
 
 def main(argv=None):
-    p = argparse.ArgumentParser(prog='pdf-revision-diff', description=__doc__.split('\n')[0] + '.\n\n' + (
+    p = argparse.ArgumentParser(prog='redlatex', description=__doc__.split('\n')[0] + '.\n\n' + (
         'Every page of the revised PDF is shown next to the matching page of the earlier version, with '
         'removed text highlighted on the left and added text on the right. Versions are compiled with '
         'latexmk from git revisions (or the working tree) unless PDFs are given.'),
@@ -32,7 +32,7 @@ def main(argv=None):
     args = p.parse_args(argv)
 
     repo = Path(args.repo).resolve()
-    with tempfile.TemporaryDirectory(prefix='pdfdiff-') as tmp:
+    with tempfile.TemporaryDirectory(prefix='redlatex-') as tmp:
         work = Path(tmp)
         old_pdf = args.old_pdf or compile_rev(repo, args.tex, args.old, work)
         new_pdf = args.new_pdf or compile_rev(repo, args.tex, args.new, work)
