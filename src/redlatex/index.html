@@ -74,7 +74,24 @@ iframe{width:100%;height:70vh;min-height:26rem;border:1px solid var(--line);bord
 .how b{color:var(--ink);display:block}
 footer{text-align:center;color:var(--muted);font-size:.85rem;margin-top:2.5rem}
 footer a{color:inherit}
-@media (max-width:560px){.drops,.opts,.how{grid-template-columns:1fr}.drop{min-height:8.5rem}}
+.tabs{display:flex;gap:.25rem;padding:.25rem;margin:0 0 1rem;background:var(--bg);border:1px solid var(--line);border-radius:12px}
+.tabs button{flex:1;padding:.55rem .75rem;border:0;border-radius:9px;background:none;color:var(--muted);font:inherit;font-weight:600;cursor:pointer}
+.tabs button[aria-selected=true]{background:var(--card);color:var(--ink);box-shadow:0 1px 3px rgb(0 0 0/.12)}
+.gh{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+.gh .wide{grid-column:1/-1}
+.gh .before{--c:var(--red)} .gh .after{--c:var(--green)}
+.gh .before label,.gh .after label{color:var(--c)}
+.note-small{color:var(--muted);font-size:.85rem;margin:.6rem 0 0}
+.steps{list-style:none;margin:1.1rem 0 0;padding:1rem 1.1rem;border:1px solid var(--line);border-radius:12px;background:var(--bg);display:none}
+.steps.show{display:block}
+.steps li{display:flex;align-items:center;gap:.65rem;padding:.28rem 0;color:var(--muted);font-size:.95rem}
+.steps li::before{content:"";flex:none;width:.95rem;height:.95rem;border-radius:50%;border:2px solid var(--line)}
+.steps li.active{color:var(--ink);font-weight:600}
+.steps li.active::before{border-color:var(--ink);border-right-color:transparent;animation:s .7s linear infinite}
+.steps li.done{color:var(--ink)}
+.steps li.done::before{border-color:var(--green);background:var(--green);box-shadow:inset 0 0 0 2px var(--card)}
+.steps .t{margin-left:auto;font:500 .8rem ui-monospace,monospace;color:var(--muted)}
+@media (max-width:560px){.drops,.opts,.how,.gh{grid-template-columns:1fr}.drop{min-height:8.5rem}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
@@ -87,23 +104,44 @@ footer a{color:inherit}
   </header>
 
   <form id="f" autocomplete="off">
-    <div class="drops">
-      <label class="drop before" id="d-old">
-        <input type="file" name="old" accept=".zip,.tex,application/zip" required aria-label="Earlier version: zip or tex file">
-        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4m0 0L7 9m5-5 5 5M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>
-        <span class="tag">Before</span>
-        <h2>Earlier version</h2>
-        <span class="hint">Drop a .zip project or a single .tex file</span>
-        <span class="file"></span>
-      </label>
-      <label class="drop after" id="d-new">
-        <input type="file" name="new" accept=".zip,.tex,application/zip" required aria-label="Revised version: zip or tex file">
-        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4m0 0L7 9m5-5 5 5M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>
-        <span class="tag">After</span>
-        <h2>Revised version</h2>
-        <span class="hint">Drop a .zip project or a single .tex file</span>
-        <span class="file"></span>
-      </label>
+    <div class="tabs" role="tablist">
+      <button type="button" role="tab" aria-selected="true" data-mode="upload">Upload files</button>
+      <button type="button" role="tab" aria-selected="false" data-mode="github">From GitHub</button>
+    </div>
+    <input type="hidden" name="mode" id="mode" value="upload">
+
+    <div id="p-upload">
+      <div class="drops">
+        <label class="drop before" id="d-old">
+          <input type="file" name="old" accept=".zip,.tex,application/zip" aria-label="Earlier version: zip or tex file">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4m0 0L7 9m5-5 5 5M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>
+          <span class="tag">Before</span>
+          <h2>Earlier version</h2>
+          <span class="hint">Drop a .zip project or a single .tex file</span>
+          <span class="file"></span>
+        </label>
+        <label class="drop after" id="d-new">
+          <input type="file" name="new" accept=".zip,.tex,application/zip" aria-label="Revised version: zip or tex file">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4m0 0L7 9m5-5 5 5M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>
+          <span class="tag">After</span>
+          <h2>Revised version</h2>
+          <span class="hint">Drop a .zip project or a single .tex file</span>
+          <span class="file"></span>
+        </label>
+      </div>
+      <p class="note-small">On Overleaf: Menu → Download → Source gives you the .zip.</p>
+    </div>
+
+    <div id="p-github" hidden>
+      <div class="gh">
+        <div class="wide"><label for="repo">Public GitHub repository</label>
+          <input type="text" id="repo" name="repo" placeholder="https://github.com/owner/paper" maxlength="200" spellcheck="false"></div>
+        <div class="before"><label for="old_ref">Before: branch, tag or commit</label>
+          <input type="text" id="old_ref" name="old_ref" placeholder="v1" maxlength="200" spellcheck="false"></div>
+        <div class="after"><label for="new_ref">After: branch, tag or commit</label>
+          <input type="text" id="new_ref" name="new_ref" placeholder="main" maxlength="200" spellcheck="false"></div>
+      </div>
+      <p class="note-small">Overleaf projects synced to GitHub work too. Put the main file's path (e.g. paper/main.tex) under Options if it is not found.</p>
     </div>
 
     <details>
@@ -117,6 +155,13 @@ footer a{color:inherit}
     </details>
 
     <button class="go" id="go" type="submit" disabled>Create diff PDF</button>
+    <ol class="steps" id="steps" aria-live="polite">
+      <li data-s="fetch-old">Get earlier version</li>
+      <li data-s="compile-old">Compile earlier version</li>
+      <li data-s="fetch-new">Get revised version</li>
+      <li data-s="compile-new">Compile revised version</li>
+      <li data-s="diff">Compare and build the diff<span class="t" id="clock"></span></li>
+    </ol>
     <div class="msg" id="msg" role="status" aria-live="polite"></div>
 
     <section id="result">
@@ -126,8 +171,8 @@ footer a{color:inherit}
   </form>
 
   <ol class="how">
-    <li><b>Upload both versions</b>A .zip of the whole project (.tex, figures, .bib), or just one .tex file.</li>
-    <li><b>We compile them</b>With latexmk, then compare the words in the PDFs.</li>
+    <li><b>Give us both versions</b>A .zip of the project, a single .tex file, or two refs of a GitHub repo.</li>
+    <li><b>We compile them</b>With latexmk, then compare the words and figures in the PDFs.</li>
     <li><b>Read the changes</b>Red on the left, green on the right, with a summary per section.</li>
   </ol>
   <footer>Files are deleted right after your diff is made. <a href="https://github.com/stormaref/redlatex">Open source on GitHub</a></footer>
@@ -136,7 +181,9 @@ footer a{color:inherit}
 <script>
 const f = document.getElementById('f'), go = document.getElementById('go'), msg = document.getElementById('msg');
 const result = document.getElementById('result'), dl = document.getElementById('dl'), pv = document.getElementById('pv');
-let url = null;
+const steps = document.getElementById('steps'), clock = document.getElementById('clock');
+const ORDER = ['fetch-old', 'compile-old', 'fetch-new', 'compile-new', 'diff', 'done'];
+let url = null, mode = 'upload', busy = false;
 
 async function loadCount() {
   try {
@@ -147,11 +194,31 @@ async function loadCount() {
 }
 loadCount();
 
+function ready() {
+  if (mode === 'upload') return !!(f.old.files.length && f.new.files.length);
+  return !!(f.repo.value.trim() && f.old_ref.value.trim() && f.new_ref.value.trim());
+}
+function refresh() { go.disabled = busy || !ready(); }
+
+for (const tab of document.querySelectorAll('.tabs button')) {
+  tab.addEventListener('click', () => {
+    mode = tab.dataset.mode;
+    document.getElementById('mode').value = mode;
+    for (const t of document.querySelectorAll('.tabs button')) t.setAttribute('aria-selected', t === tab);
+    document.getElementById('p-upload').hidden = mode !== 'upload';
+    document.getElementById('p-github').hidden = mode !== 'github';
+    steps.querySelector('[data-s=fetch-old]').textContent = mode === 'github' ? 'Download earlier version' : 'Unpack earlier version';
+    steps.querySelector('[data-s=fetch-new]').textContent = mode === 'github' ? 'Download revised version' : 'Unpack revised version';
+    refresh();
+  });
+}
+for (const el of [f.repo, f.old_ref, f.new_ref]) el.addEventListener('input', refresh);
+
 function sync(drop) {
   const input = drop.querySelector('input'), name = input.files[0] && input.files[0].name;
   drop.classList.toggle('has', !!name);
   drop.querySelector('.file').textContent = name || '';
-  go.disabled = !(f.old.files.length && f.new.files.length);
+  refresh();
 }
 for (const drop of document.querySelectorAll('.drop')) {
   const input = drop.querySelector('input');
@@ -164,32 +231,57 @@ for (const drop of document.querySelectorAll('.drop')) {
   });
 }
 function show(kind, text) { msg.className = 'msg ' + kind; msg.textContent = text; }
+function stage(state) {
+  const k = ORDER.indexOf(state);
+  for (const li of steps.children) {
+    const i = ORDER.indexOf(li.dataset.s);
+    li.className = k < 0 ? '' : i < k ? 'done' : i === k ? 'active' : '';
+  }
+}
+async function detail(r) {
+  try { const j = await r.json(); if (typeof j.detail === 'string') return j.detail; } catch (_) {}
+  return 'Something went wrong (HTTP ' + r.status + ').';
+}
+const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 f.addEventListener('submit', async e => {
   e.preventDefault();
+  if (!ready()) return;
   result.classList.remove('show');
   if (url) { URL.revokeObjectURL(url); url = null; }
-  go.disabled = true; go.classList.add('busy');
-  go.innerHTML = '<span class="spin"></span>Compiling both versions…';
-  show('note', 'This usually takes under a minute, longer for big projects. Keep this tab open.');
+  busy = true; refresh(); go.classList.add('busy');
+  go.innerHTML = '<span class="spin"></span>Working…';
+  msg.className = 'msg'; steps.classList.add('show'); stage('');
+  const t0 = Date.now(), tick = setInterval(() => { clock.textContent = Math.round((Date.now() - t0) / 1000) + ' s'; }, 500);
   try {
-    const r = await fetch('/diff', { method: 'POST', body: new FormData(f) });
-    if (!r.ok) {
-      let detail = 'Something went wrong (HTTP ' + r.status + ').';
-      try { const j = await r.json(); if (typeof j.detail === 'string') detail = j.detail; } catch (_) {}
-      throw new Error(detail);
+    const data = new FormData(f);
+    if (mode === 'github') { data.delete('old'); data.delete('new'); }
+    const r = await fetch('/api/jobs', { method: 'POST', body: data });
+    if (!r.ok) throw new Error(await detail(r));
+    const { id } = await r.json();
+    for (;;) {
+      await sleep(900);
+      const s = await fetch('/api/jobs/' + id);
+      if (!s.ok) throw new Error(await detail(s));
+      const j = await s.json();
+      if (j.state === 'error') throw new Error(j.error || 'Building the diff failed.');
+      if (j.state === 'queued') { stage(''); show('note', j.ahead ? `Waiting for a free slot: ${j.ahead} ahead of you.` : 'Waiting for a free slot…'); continue; }
+      msg.className = 'msg';
+      stage(j.state);
+      if (j.state === 'done') break;
     }
-    url = URL.createObjectURL(await r.blob());
+    const p = await fetch('/api/jobs/' + id + '/pdf');
+    if (!p.ok) throw new Error(await detail(p));
+    url = URL.createObjectURL(await p.blob());
     dl.href = url; pv.src = url;
     result.classList.add('show');
     loadCount();
-    msg.className = 'msg';
     result.scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (err) {
     show('err', err.message || 'Network error, please try again.');
   } finally {
-    go.classList.remove('busy'); go.textContent = 'Create diff PDF';
-    go.disabled = !(f.old.files.length && f.new.files.length);
+    clearInterval(tick);
+    busy = false; go.classList.remove('busy'); go.textContent = 'Create diff PDF'; refresh();
   }
 });
 </script>

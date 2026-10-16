@@ -128,3 +128,72 @@ def test_compile_runs_in_sandbox_env(tmp_path):
     from redlatex.build import sandbox_env
     env = sandbox_env(tmp_path)
     assert env['openin_any'] == 'p' and env['shell_escape'] == 'f' and 'AWS_SECRET_ACCESS_KEY' not in env
+
+
+def test_upload_job_reports_progress_and_serves_pdf_once():
+    _need_latexmk()
+    import time as _t
+    r = client.post('/api/jobs', data={'mode': 'upload'},
+                    files={'old': ('a.tex', _tex('Hello world, the first version of this text.')),
+                           'new': ('b.tex', _tex('Hello brave world, the second version of this text.'))})
+    assert r.status_code == 200
+    jid, seen = r.json()['id'], set()
+    for _ in range(300):
+        st = client.get(f'/api/jobs/{jid}').json()
+        seen.add(st['state'])
+        if st['state'] in ('done', 'error'):
+            break
+        _t.sleep(0.1)
+    assert st['state'] == 'done', st
+    assert seen & {'compile-old', 'compile-new', 'diff', 'done'}
+    pdf = client.get(f'/api/jobs/{jid}/pdf')
+    assert pdf.status_code == 200 and pdf.content.startswith(b'%PDF')
+    assert client.get(f'/api/jobs/{jid}').status_code == 404       # deleted once fetched
+
+
+def test_job_error_is_reported():
+    import time as _t
+    r = client.post('/api/jobs', data={'mode': 'upload'},
+                    files={'old': ('a.zip', make_zip({'x.txt': 'x'})), 'new': ('b.zip', make_zip({'y.txt': 'y'}))})
+    jid = r.json()['id']
+    for _ in range(100):
+        st = client.get(f'/api/jobs/{jid}').json()
+        if st['state'] == 'error':
+            break
+        _t.sleep(0.05)
+    assert st['state'] == 'error' and 'no main .tex' in st['error']
+
+
+def test_github_input_validation():
+    import pytest
+    from fastapi import HTTPException
+    from redlatex.web import parse_github
+    assert parse_github('https://github.com/stormaref/redlatex', 'v1.0') == ('stormaref', 'redlatex', 'v1.0')
+    assert parse_github('stormaref/redlatex.git', 'feature/x') == ('stormaref', 'redlatex', 'feature/x')
+    for repo, ref in [('https://evil.com/a/b', 'main'), ('a/b/../../c', 'main'), ('a/b', '../x'),
+                      ('a/b', '-x'), ('a/b', 'x y'), ('http://github.com.evil.com/a/b', 'main')]:
+        with pytest.raises(HTTPException):
+            parse_github(repo, ref)
+    r = client.post('/api/jobs', data={'mode': 'github', 'repo': 'https://evil.com/a/b', 'old_ref': 'a', 'new_ref': 'b'})
+    assert r.status_code == 400
+
+
+def test_github_job_with_fake_download(monkeypatch, tmp_path):
+    _need_latexmk()
+    import time as _t
+    import redlatex.web as web
+
+    def fake_fetch(owner, repo, ref, dest):
+        dest.mkdir(parents=True)
+        word = 'first' if ref == 'v1' else 'second'
+        (dest / 'main.tex').write_bytes(_tex(f'Hello world, the {word} version of this text.'))
+        return dest
+    monkeypatch.setattr(web, 'fetch_github', fake_fetch)
+    jid = client.post('/api/jobs', data={'mode': 'github', 'repo': 'someone/paper', 'old_ref': 'v1',
+                                         'new_ref': 'v2'}).json()['id']
+    for _ in range(300):
+        st = client.get(f'/api/jobs/{jid}').json()
+        if st['state'] in ('done', 'error'):
+            break
+        _t.sleep(0.1)
+    assert st['state'] == 'done', st
