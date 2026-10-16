@@ -92,19 +92,13 @@ def test_security_headers():
     assert 'docs' not in client.get('/docs').text.lower() or client.get('/docs').status_code == 404
 
 
-def test_single_tex_files_and_counter(tmp_path, monkeypatch):
+def test_single_tex_files():
     _need_latexmk()
-    import redlatex.web as web
-    from redlatex.counter import Counter
-    monkeypatch.setattr(web, 'counter', Counter(tmp_path / 'c.json'))
-    assert client.get('/api/stats').json() == {'documents': 0}
     r = client.post('/diff', files={'old': ('draft1.tex', _tex('Hello world, the first version of this text.')),
                                     'new': ('draft2.tex', _tex('Hello brave world, the second version of this text.'))})
     assert r.status_code == 200 and r.content.startswith(b'%PDF')
-    assert client.get('/api/stats').json() == {'documents': 1}
-    assert Counter(tmp_path / 'c.json').value == 1          # persisted
     bad = client.post('/diff', files={'old': ('x.txt', b'hi'), 'new': ('y.tex', _tex('x'))})
-    assert bad.status_code == 400 and client.get('/api/stats').json() == {'documents': 1}
+    assert bad.status_code == 400
 
 
 def test_compile_error_does_not_leak_paths():

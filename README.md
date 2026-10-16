@@ -41,8 +41,7 @@ captions and bibliography entries are all compared as the reader sees them.
 Open **<https://redlatex.onrender.com>**, give it the earlier and the revised version of your document, and
 download the diff PDF. Each version can be a `.zip` of the whole project (with figures, `.bib`, styles), a
 single `.tex` file, or a branch, tag or commit of a public GitHub repository (Overleaf projects synced to GitHub
-work too; otherwise use Overleaf's *Download → Source* zip). Progress is shown step by step. The page shows how many documents have been compared so far. Your files are deleted as soon
-as the diff is made; only that counter is kept. The hosted instance is small and may take a few seconds to
+work too; otherwise use Overleaf's *Download → Source* zip). Progress is shown step by step. Your files are deleted as soon as the diff is made. The hosted instance is small and may take a few seconds to
 wake up; for large projects or private work, run it yourself.
 
 ## GitHub Action
@@ -156,9 +155,6 @@ The web app compiles LaTeX written by strangers, so it is locked down in layers:
 Compiling is CPU- and memory-heavy and the service runs a single worker, so size your instance for the
 documents and traffic you expect. Report vulnerabilities as described in [SECURITY.md](SECURITY.md).
 
-The documents-compared counter is stored in `REDLATEX_DATA_DIR` (`/data` in the Docker image). Mount a
-persistent disk there to keep it across deploys; `render.yaml` does this for you.
-
 ### HTTP API
 
 - `POST /diff` (multipart `old`, `new`, optional `tex`, `title`) returns the PDF directly:
@@ -167,13 +163,11 @@ persistent disk there to keep it across deploys; `render.yaml` does this for you
   `old_ref`, `new_ref`) and returns `{"id": ...}`; `GET /api/jobs/{id}` reports the stage (`queued`,
   `fetch-old`, `compile-old`, `fetch-new`, `compile-new`, `diff`, `done` or `error`); `GET /api/jobs/{id}/pdf`
   returns the PDF once, then deletes it.
-- `GET /api/stats` returns the number of documents compared.
 
 ### Deploy to Render
 
 1. Create a Render **Web Service** from your fork; the Docker runtime picks up the `Dockerfile` (`render.yaml`
    is a ready blueprint). Use at least the Starter instance: compiling LaTeX needs more than 512 MB.
-   Add a 1 GB **disk** mounted at `/data` (Settings → Disks) if you set the service up by hand.
 2. Copy the service's **Deploy Hook** URL and save it as the repository secret `RENDER_DEPLOY_HOOK_URL`.
 3. Turn off Render's own auto-deploy. `ci.yml` tests and builds on every push, and `deploy.yml` calls the hook
    once CI has passed on `main`.

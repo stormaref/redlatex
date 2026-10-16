@@ -37,7 +37,6 @@ Open an issue with:
 | `src/redlatex/build.py` | compiling git revisions and project trees with `latexmk` |
 | `src/redlatex/cli.py` | command-line interface |
 | `src/redlatex/web.py`, `index.html` | upload/GitHub service with background jobs, and its page |
-| `src/redlatex/counter.py` | the documents-compared counter |
 | `action.yml` | the GitHub Action (tested by `.github/workflows/action-test.yml` on `examples/`) |
 
 By contributing you agree that your work is released under the [MIT License](LICENSE).

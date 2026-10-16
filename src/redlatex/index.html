@@ -27,7 +27,6 @@ header{text-align:center;margin-bottom:2.25rem}
 .logo{font:700 clamp(2.2rem,6vw,3rem)/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:-.04em}
 .logo .r{color:var(--red)} .logo .g{color:var(--green)}
 header p{color:var(--muted);margin:.8rem auto 0;max-width:30rem;font-size:1.05rem}
-header .count{font-size:.9rem;margin-top:.6rem}header .count b{color:var(--ink);font-variant-numeric:tabular-nums}
 form{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:1.5rem;box-shadow:var(--shadow)}
 .drops{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
 .drop{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;
@@ -100,7 +99,6 @@ footer a{color:inherit}
   <header>
     <div class="logo"><span class="r">red</span><span class="g">latex</span></div>
     <p>See exactly what changed between two versions of your LaTeX paper, word by word, side by side.</p>
-    <p class="count" id="count" hidden><b id="n">0</b> documents compared so far</p>
   </header>
 
   <form id="f" autocomplete="off">
@@ -185,15 +183,6 @@ const steps = document.getElementById('steps'), clock = document.getElementById(
 const ORDER = ['fetch-old', 'compile-old', 'fetch-new', 'compile-new', 'diff', 'done'];
 let url = null, mode = 'upload', busy = false;
 
-async function loadCount() {
-  try {
-    const j = await (await fetch('/api/stats')).json();
-    document.getElementById('n').textContent = j.documents.toLocaleString();
-    document.getElementById('count').hidden = false;
-  } catch (_) {}
-}
-loadCount();
-
 function ready() {
   if (mode === 'upload') return !!(f.old.files.length && f.new.files.length);
   return !!(f.repo.value.trim() && f.old_ref.value.trim() && f.new_ref.value.trim());
@@ -275,7 +264,6 @@ f.addEventListener('submit', async e => {
     url = URL.createObjectURL(await p.blob());
     dl.href = url; pv.src = url;
     result.classList.add('show');
-    loadCount();
     result.scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (err) {
     show('err', err.message || 'Network error, please try again.');

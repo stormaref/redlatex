@@ -22,7 +22,6 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from starlette.background import BackgroundTask
 
 from .build import compile_tree, run_killing
-from .counter import default_counter
 
 MAX_ZIP_BYTES = 50 * 1024 * 1024
 MAX_TEX_BYTES = 5 * 1024 * 1024
@@ -45,7 +44,6 @@ active = set()
 active_lock = threading.Lock()
 recent = defaultdict(deque)
 slots = threading.BoundedSemaphore(MAX_JOBS)
-counter = default_counter()
 
 app = FastAPI(title='redlatex', docs_url=None, redoc_url=None, openapi_url=None)
 
@@ -98,11 +96,6 @@ def index():
 @app.get('/healthz')
 def healthz():
     return {'ok': True}
-
-
-@app.get('/api/stats')
-def stats():
-    return JSONResponse({'documents': counter.value}, headers={'Cache-Control': 'no-store'})
 
 
 # ---------------------------------------------------------------- getting the sources
@@ -297,7 +290,6 @@ def build_diff(work, sources, tex, title, labels, progress):
         raise HTTPException(422, f'building the diff timed out after {RENDER_TIMEOUT}s; try a shorter document')
     if code or not out.exists():
         raise HTTPException(500, 'building the diff failed')
-    counter.increment()
     return out
 
 
