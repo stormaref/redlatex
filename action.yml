@@ -1,0 +1,119 @@
+name: redlatex diff
+description: Compile two revisions of a LaTeX document and produce a side-by-side, word-level diff PDF.
+author: stormaref
+branding:
+  icon: git-pull-request
+  color: red
+
+inputs:
+  tex:
+    description: Main .tex file, relative to working-directory.
+    default: main.tex
+  old:
+    description: Earlier revision. Defaults to the pull request base, or HEAD~1 outside pull requests.
+    default: ''
+  new:
+    description: Revised revision.
+    default: HEAD
+  working-directory:
+    description: Root of the git repository that holds the LaTeX project.
+    default: .
+  output:
+    description: Path of the diff PDF to write.
+    default: redlatex-diff.pdf
+  title:
+    description: Cover page title.
+    default: Document changes
+  install-tex:
+    description: Install TeX Live with apt (set to false if your job already has latexmk).
+    default: 'true'
+  artifact-name:
+    description: Name of the uploaded artifact (empty to skip uploading).
+    default: redlatex-diff
+  comment:
+    description: On pull requests, post (or update) a comment linking to the diff. Needs pull-requests write permission.
+    default: 'true'
+  version:
+    description: redlatex to run, as a uv requirement (default: the version of this action).
+    default: ''
+
+outputs:
+  pdf:
+    description: Path of the diff PDF.
+    value: ${{ steps.diff.outputs.pdf }}
+  summary:
+    description: One-line summary, e.g. "4 spreads, -59 +123 words, 0 changed figures".
+    value: ${{ steps.diff.outputs.summary }}
+  artifact-url:
+    description: URL of the uploaded artifact.
+    value: ${{ steps.upload.outputs.artifact-url }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install TeX Live
+      if: inputs.install-tex == 'true'
+      shell: bash
+      run: |
+        sudo apt-get update -qq
+        sudo apt-get install -y -qq --no-install-recommends latexmk texlive-latex-base texlive-latex-recommended \
+          texlive-latex-extra texlive-fonts-recommended texlive-science texlive-pictures texlive-bibtex-extra biber >/dev/null
+
+    - uses: astral-sh/setup-uv@v5
+
+    - name: Build the diff
+      id: diff
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        TEX: ${{ inputs.tex }}
+        OLD: ${{ inputs.old || github.event.pull_request.base.sha }}
+        NEW: ${{ inputs.new }}
+        OUT: ${{ inputs.output }}
+        TITLE: ${{ inputs.title }}
+        SPEC: ${{ inputs.version || github.action_path }}
+      run: |
+        set -euo pipefail
+        OLD="${OLD:-HEAD~1}"
+        for rev in "$OLD" "$NEW"; do
+          git cat-file -e "$rev^{commit}" 2>/dev/null || git fetch --no-tags --depth=1 origin "$rev"
+        done
+        uvx --from "$SPEC" redlatex --repo . --tex "$TEX" --old "$OLD" --new "$NEW" --out "$OUT" --title "$TITLE" | tee redlatex.log
+        echo "pdf=$(realpath "$OUT")" >> "$GITHUB_OUTPUT"
+        echo "summary=$(sed -n 's/^.*\.pdf: //p' redlatex.log | tail -1)" >> "$GITHUB_OUTPUT"
+        echo "old=$(git rev-parse --short "$OLD")" >> "$GITHUB_OUTPUT"
+        echo "new=$(git rev-parse --short "$NEW")" >> "$GITHUB_OUTPUT"
+        rm -f redlatex.log
+
+    - name: Upload the diff
+      id: upload
+      if: inputs.artifact-name != ''
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.artifact-name }}
+        path: ${{ steps.diff.outputs.pdf }}
+
+    - name: Comment on the pull request
+      if: inputs.comment == 'true' && github.event_name == 'pull_request' && inputs.artifact-name != ''
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        REPO: ${{ github.repository }}
+        PR: ${{ github.event.pull_request.number }}
+        SUMMARY: ${{ steps.diff.outputs.summary }}
+        URL: ${{ steps.upload.outputs.artifact-url }}
+        OLD: ${{ steps.diff.outputs.old }}
+        NEW: ${{ steps.diff.outputs.new }}
+      run: |
+        set -euo pipefail
+        body="<!-- redlatex -->
+        ### redlatex: changes in the compiled document
+        \`$OLD\` → \`$NEW\`: $SUMMARY
+
+        [Download the side-by-side diff PDF]($URL) (removed text in red, added text in green)."
+        id=$(gh api "repos/$REPO/issues/$PR/comments" --paginate --jq '.[] | select(.body | startswith("<!-- redlatex -->")) | .id' | tail -1)
+        if [ -n "$id" ]; then
+          gh api -X PATCH "repos/$REPO/issues/comments/$id" -f body="$body" >/dev/null
+        else
+          gh api -X POST "repos/$REPO/issues/$PR/comments" -f body="$body" >/dev/null
+        fi

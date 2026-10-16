@@ -1,0 +1,31 @@
+name: Action test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  action:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: redlatex
+      - name: Make a LaTeX repository with two revisions
+        run: |
+          mkdir paper && cd paper && git init -q && git config user.email ci@example.com && git config user.name ci
+          cp ../redlatex/examples/paper-v1/main.tex . && git add . && git commit -qm v1 && git tag v1
+          cp ../redlatex/examples/paper-v2/main.tex . && git commit -qam v2
+      - id: diff
+        uses: ./redlatex
+        with:
+          working-directory: paper
+          old: v1
+          new: HEAD
+          comment: 'false'
+      - name: Check the result
+        run: |
+          test -s "${{ steps.diff.outputs.pdf }}"
+          echo "summary: ${{ steps.diff.outputs.summary }}"
+          echo "${{ steps.diff.outputs.summary }}" | grep -q "words"
