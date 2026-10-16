@@ -34,7 +34,7 @@ inputs:
     description: On pull requests, post (or update) a comment linking to the diff. Needs pull-requests write permission.
     default: 'true'
   version:
-    description: redlatex to run, as a uv requirement (default: the version of this action).
+    description: "redlatex to run, as a uv requirement (default: the version of this action)."
     default: ''
 
 outputs:
