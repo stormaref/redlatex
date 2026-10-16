@@ -23,10 +23,11 @@ COPY pyproject.toml uv.lock README.md LICENSE ./
 COPY src ./src
 RUN uv sync --frozen --no-dev --extra web
 
-RUN useradd --create-home --uid 10001 app
-USER app
-ENV PATH="/app/.venv/bin:$PATH" PORT=10000
+RUN useradd --create-home --uid 10001 app && mkdir /data && chown app:app /data
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+ENV PATH="/app/.venv/bin:$PATH" PORT=10000 REDLATEX_DATA_DIR=/data
 EXPOSE 10000
 
 HEALTHCHECK --interval=30s --timeout=5s CMD python -c "import os,urllib.request as u;u.urlopen(f'http://127.0.0.1:{os.environ[\"PORT\"]}/healthz')"
-CMD ["sh", "-c", "exec uvicorn redlatex.web:app --host 0.0.0.0 --port ${PORT} --workers 1 --proxy-headers --forwarded-allow-ips='*'"]
+ENTRYPOINT ["docker-entrypoint.sh"]
+CMD ["sh", "-c", "exec uvicorn redlatex.web:app --host 0.0.0.0 --port ${PORT} --workers 1 --no-server-header --proxy-headers --forwarded-allow-ips='*'"]

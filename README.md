@@ -33,9 +33,11 @@ captions and bibliography entries are all compared as the reader sees them.
 
 ## Use it online
 
-Open **<https://redlatex.onrender.com>**, drop in the two versions of your project as `.zip` files, and download
-the diff PDF. Files are deleted as soon as the diff is made. The hosted instance is small and may take a few
-seconds to wake up; for large projects or private work, run it yourself.
+Open **<https://redlatex.onrender.com>**, give it the earlier and the revised version of your document, and
+download the diff PDF. Each version can be a `.zip` of the whole project (with figures, `.bib`, styles) or just a
+single `.tex` file. The page shows how many documents have been compared so far. Your files are deleted as soon
+as the diff is made; only that counter is kept. The hosted instance is small and may take a few seconds to
+wake up; for large projects or private work, run it yourself.
 
 ## Command line
 
@@ -90,16 +92,31 @@ docker run -p 10000:10000 redlatex      # then open http://localhost:10000
 
 Without Docker: `uv sync --extra web && uv run uvicorn redlatex.web:app` (needs `latexmk` on `PATH`).
 
-**Limits and safety.** Uploads are capped at 50 MB per zip (200 MB unpacked, 5000 files) and each version
-gets 60 seconds to compile (`REDLATEX_COMPILE_TIMEOUT`), at most 2 documents are processed at once (`REDLATEX_MAX_JOBS`; others wait up to 20 s, then get a 503), each client IP may run one diff at a time, and documents are limited to 100 pages (`REDLATEX_MAX_PAGES`) with 90 s to build the diff (`REDLATEX_RENDER_TIMEOUT`). Oversized uploads are refused from the `Content-Length` header before they are read. Archives are unpacked with path-traversal checks, LaTeX runs with shell escape off
-and with TeX file access restricted to the project (`openin_any=p`, `openout_any=p`), the container runs as a
-non-root user, and temporary files are removed after every request. Compiling is CPU- and memory-heavy and the
-service runs a single worker, so size your instance for the documents and traffic you expect.
+### Limits and security
+
+The web app compiles LaTeX written by strangers, so it is locked down in layers:
+
+| Area | Protection |
+| --- | --- |
+| Compile time | 45 s per version and 90 s for both (`REDLATEX_COMPILE_TIMEOUT`, `REDLATEX_COMPILE_BUDGET`); on timeout the whole process tree is killed. Building the diff gets 90 s (`REDLATEX_RENDER_TIMEOUT`). |
+| LaTeX sandbox | shell escape off, TeX file access restricted to the project (`openin_any=p`, `openout_any=p`), a minimal environment with no inherited secrets, and CPU, memory and output-file-size limits on the compiler process |
+| Uploads | `.zip` up to 50 MB (200 MB and 5000 files unpacked) or a `.tex` up to 5 MB; path-traversal and absolute-path checks; oversized requests refused from the `Content-Length` header before they are read |
+| Size | documents are limited to 100 pages (`REDLATEX_MAX_PAGES`) |
+| Abuse | one running diff per client IP, 20 diffs per hour per IP (`REDLATEX_RATE_PER_HOUR`), at most 2 diffs processed at once (`REDLATEX_MAX_JOBS`; others wait up to 20 s, then get a 503) |
+| Browser | strict Content-Security-Policy (hash-based, no inline allowances), `nosniff`, no framing, HSTS, no referrer, no third-party requests |
+| Server | runs as a non-root user, API docs disabled, no server banner, error messages never contain server paths, temporary files removed after every request |
+
+Compiling is CPU- and memory-heavy and the service runs a single worker, so size your instance for the
+documents and traffic you expect. Report vulnerabilities as described in [SECURITY.md](SECURITY.md).
+
+The documents-compared counter is stored in `REDLATEX_DATA_DIR` (`/data` in the Docker image). Mount a
+persistent disk there to keep it across deploys; `render.yaml` does this for you.
 
 ### Deploy to Render
 
 1. Create a Render **Web Service** from your fork; the Docker runtime picks up the `Dockerfile` (`render.yaml`
    is a ready blueprint). Use at least the Starter instance: compiling LaTeX needs more than 512 MB.
+   Add a 1 GB **disk** mounted at `/data` (Settings → Disks) if you set the service up by hand.
 2. Copy the service's **Deploy Hook** URL and save it as the repository secret `RENDER_DEPLOY_HOOK_URL`.
 3. Turn off Render's own auto-deploy. `ci.yml` tests and builds on every push, and `deploy.yml` calls the hook
    once CI has passed on `main`.

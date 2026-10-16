@@ -70,3 +70,61 @@ def test_page_cap_and_render_subprocess(monkeypatch):
     monkeypatch.setattr(web, 'MAX_PAGES', 0)
     r = client.post('/diff', files={'old': ('a.zip', old), 'new': ('b.zip', new)})
     assert r.status_code == 413 and 'limit is 0' in r.text
+
+
+def _tex(body):
+    return (r'\documentclass{article}\begin{document}' + body + r'\end{document}').encode()
+
+
+def _need_latexmk():
+    import shutil
+    import pytest
+    if not shutil.which('latexmk'):
+        pytest.skip('latexmk not installed')
+
+
+def test_security_headers():
+    r = client.get('/')
+    assert r.headers['x-content-type-options'] == 'nosniff'
+    assert r.headers['x-frame-options'] == 'DENY'
+    csp = r.headers['content-security-policy']
+    assert "default-src 'none'" in csp and 'sha256-' in csp and "'unsafe-inline'" not in csp
+    assert 'docs' not in client.get('/docs').text.lower() or client.get('/docs').status_code == 404
+
+
+def test_single_tex_files_and_counter(tmp_path, monkeypatch):
+    _need_latexmk()
+    import redlatex.web as web
+    from redlatex.counter import Counter
+    monkeypatch.setattr(web, 'counter', Counter(tmp_path / 'c.json'))
+    assert client.get('/api/stats').json() == {'documents': 0}
+    r = client.post('/diff', files={'old': ('draft1.tex', _tex('Hello world, the first version of this text.')),
+                                    'new': ('draft2.tex', _tex('Hello brave world, the second version of this text.'))})
+    assert r.status_code == 200 and r.content.startswith(b'%PDF')
+    assert client.get('/api/stats').json() == {'documents': 1}
+    assert Counter(tmp_path / 'c.json').value == 1          # persisted
+    bad = client.post('/diff', files={'old': ('x.txt', b'hi'), 'new': ('y.tex', _tex('x'))})
+    assert bad.status_code == 400 and client.get('/api/stats').json() == {'documents': 1}
+
+
+def test_compile_error_does_not_leak_paths():
+    _need_latexmk()
+    broken = make_zip({'main.tex': r'\documentclass{article}\begin{document}\undefinedmacro\end{document}'.replace('\\undefinedmacro', '\\input{nothere.tex}')})
+    r = client.post('/diff', files={'old': ('a.zip', broken), 'new': ('b.zip', broken)})
+    assert r.status_code == 422 and 'redlatex-' not in r.text and '/tmp' not in r.text and '/var' not in r.text
+
+
+def test_hourly_rate_limit(monkeypatch):
+    import redlatex.web as web
+    monkeypatch.setattr(web, 'RATE_PER_HOUR', 2)
+    web.recent.clear()
+    z = make_zip({'notes.txt': 'hi'})
+    codes = [client.post('/diff', files={'old': ('a.zip', z), 'new': ('b.zip', z)}).status_code for _ in range(3)]
+    assert codes == [400, 400, 429]
+    web.recent.clear()
+
+
+def test_compile_runs_in_sandbox_env(tmp_path):
+    from redlatex.build import sandbox_env
+    env = sandbox_env(tmp_path)
+    assert env['openin_any'] == 'p' and env['shell_escape'] == 'f' and 'AWS_SECRET_ACCESS_KEY' not in env

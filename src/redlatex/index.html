@@ -27,6 +27,7 @@ header{text-align:center;margin-bottom:2.25rem}
 .logo{font:700 clamp(2.2rem,6vw,3rem)/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:-.04em}
 .logo .r{color:var(--red)} .logo .g{color:var(--green)}
 header p{color:var(--muted);margin:.8rem auto 0;max-width:30rem;font-size:1.05rem}
+header .count{font-size:.9rem;margin-top:.6rem}header .count b{color:var(--ink);font-variant-numeric:tabular-nums}
 form{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:1.5rem;box-shadow:var(--shadow)}
 .drops{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
 .drop{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;
@@ -82,24 +83,25 @@ footer a{color:inherit}
   <header>
     <div class="logo"><span class="r">red</span><span class="g">latex</span></div>
     <p>See exactly what changed between two versions of your LaTeX paper, word by word, side by side.</p>
+    <p class="count" id="count" hidden><b id="n">0</b> documents compared so far</p>
   </header>
 
   <form id="f" autocomplete="off">
     <div class="drops">
       <label class="drop before" id="d-old">
-        <input type="file" name="old" accept=".zip,application/zip" required aria-label="Earlier version zip">
+        <input type="file" name="old" accept=".zip,.tex,application/zip" required aria-label="Earlier version: zip or tex file">
         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4m0 0L7 9m5-5 5 5M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>
         <span class="tag">Before</span>
         <h2>Earlier version</h2>
-        <span class="hint">Drop a .zip here or click to browse</span>
+        <span class="hint">Drop a .zip project or a single .tex file</span>
         <span class="file"></span>
       </label>
       <label class="drop after" id="d-new">
-        <input type="file" name="new" accept=".zip,application/zip" required aria-label="Revised version zip">
+        <input type="file" name="new" accept=".zip,.tex,application/zip" required aria-label="Revised version: zip or tex file">
         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4m0 0L7 9m5-5 5 5M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>
         <span class="tag">After</span>
         <h2>Revised version</h2>
-        <span class="hint">Drop a .zip here or click to browse</span>
+        <span class="hint">Drop a .zip project or a single .tex file</span>
         <span class="file"></span>
       </label>
     </div>
@@ -108,9 +110,9 @@ footer a{color:inherit}
       <summary>Options</summary>
       <div class="opts">
         <div><label for="tex">Main .tex file <small>(auto-detected)</small></label>
-          <input type="text" id="tex" name="tex" placeholder="main.tex"></div>
+          <input type="text" id="tex" name="tex" placeholder="main.tex" maxlength="200"></div>
         <div><label for="title">Cover title</label>
-          <input type="text" id="title" name="title" placeholder="Document changes"></div>
+          <input type="text" id="title" name="title" placeholder="Document changes" maxlength="120"></div>
       </div>
     </details>
 
@@ -124,7 +126,7 @@ footer a{color:inherit}
   </form>
 
   <ol class="how">
-    <li><b>Zip both versions</b>The whole project folder: .tex, figures, .bib, styles.</li>
+    <li><b>Upload both versions</b>A .zip of the whole project (.tex, figures, .bib), or just one .tex file.</li>
     <li><b>We compile them</b>With latexmk, then compare the words in the PDFs.</li>
     <li><b>Read the changes</b>Red on the left, green on the right, with a summary per section.</li>
   </ol>
@@ -135,6 +137,15 @@ footer a{color:inherit}
 const f = document.getElementById('f'), go = document.getElementById('go'), msg = document.getElementById('msg');
 const result = document.getElementById('result'), dl = document.getElementById('dl'), pv = document.getElementById('pv');
 let url = null;
+
+async function loadCount() {
+  try {
+    const j = await (await fetch('/api/stats')).json();
+    document.getElementById('n').textContent = j.documents.toLocaleString();
+    document.getElementById('count').hidden = false;
+  } catch (_) {}
+}
+loadCount();
 
 function sync(drop) {
   const input = drop.querySelector('input'), name = input.files[0] && input.files[0].name;
@@ -171,6 +182,7 @@ f.addEventListener('submit', async e => {
     url = URL.createObjectURL(await r.blob());
     dl.href = url; pv.src = url;
     result.classList.add('show');
+    loadCount();
     msg.className = 'msg';
     result.scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (err) {

@@ -6,3 +6,7 @@ services:
     dockerfilePath: ./Dockerfile
     healthCheckPath: /healthz
     autoDeploy: false    # deployed by the GitHub Action via deploy hook
+    disk:                # keeps the documents-compared counter across deploys
+      name: redlatex-data
+      mountPath: /data
+      sizeGB: 1

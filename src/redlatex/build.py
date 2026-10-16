@@ -2,6 +2,7 @@
 import os
 import signal
 import subprocess
+import sys
 from datetime import date
 from pathlib import Path
 
@@ -35,10 +36,27 @@ def source(repo, tex, rev):
         return None
 
 
-def run_killing(cmd, cwd, timeout=None):
-    """Run `cmd` in its own session; on timeout kill the whole process group and raise TimeoutExpired."""
-    proc = subprocess.Popen(cmd, cwd=cwd, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                            stderr=subprocess.DEVNULL, start_new_session=True)
+def _limits(cpu=None, mem_mb=None, fsize_mb=None):
+    """preexec hook applying resource limits to a child process (POSIX only)."""
+    def apply():
+        import resource
+        if cpu:
+            resource.setrlimit(resource.RLIMIT_CPU, (cpu, cpu))
+        if fsize_mb:
+            resource.setrlimit(resource.RLIMIT_FSIZE, (fsize_mb << 20, fsize_mb << 20))
+        if mem_mb and sys.platform == 'linux':
+            resource.setrlimit(resource.RLIMIT_AS, (mem_mb << 20, mem_mb << 20))
+    return apply
+
+
+def run_killing(cmd, cwd, timeout=None, env=None, cpu=None, mem_mb=None, fsize_mb=None):
+    """Run `cmd` in its own session with optional resource limits.
+
+    On timeout the whole process group is killed and TimeoutExpired is raised.
+    """
+    proc = subprocess.Popen(cmd, cwd=cwd, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL, start_new_session=True,
+                            preexec_fn=_limits(cpu, mem_mb, fsize_mb) if os.name == 'posix' else None)
     try:
         return proc.wait(timeout=timeout)
     except subprocess.TimeoutExpired:
@@ -47,18 +65,50 @@ def run_killing(cmd, cwd, timeout=None):
         raise
 
 
+def sandbox_env(home):
+    """Minimal environment for compiling untrusted LaTeX: no inherited secrets, no shell escape, TeX file
+    access restricted to the project tree ('paranoid' mode)."""
+    keep = {k: os.environ[k] for k in ('PATH', 'LANG', 'LC_ALL') if k in os.environ}
+    return {**keep, 'HOME': str(home), 'openin_any': 'p', 'openout_any': 'p', 'shell_escape': 'f'}
+
+
+def latex_errors(log, hide=(), limit=3):
+    """First few '!' error lines of a LaTeX log, with local paths removed."""
+    try:
+        lines = Path(log).read_text(errors='ignore').splitlines()
+    except OSError:
+        return ''
+    found = []
+    for i, line in enumerate(lines):
+        if line.startswith('!'):
+            ctx = next((l for l in lines[i + 1:i + 4] if l.startswith('l.')), '')
+            found.append((line + ' ' + ctx).strip())
+            if len(found) == limit:
+                break
+    text = ' | '.join(found)[:600]
+    for h in hide:
+        text = text.replace(str(h), '.')
+    return text
+
+
 def compile_tree(root, tex, out, timeout=None):
-    """Compile `tex` (relative to the source tree `root`) with latexmk into `out`; return the PDF path."""
+    """Compile `tex` (relative to the source tree `root`) with latexmk into `out`; return the PDF path.
+
+    Meant for untrusted input: sandboxed environment, resource limits, and a hard timeout that kills the
+    whole process tree.
+    """
     tex_path = Path(tex)
     out.mkdir(parents=True, exist_ok=True)
     cmd = ['latexmk', '-pdf', '-interaction=nonstopmode', '-no-shell-escape', f'-outdir={out}', tex_path.name]
     try:
-        run_killing(cmd, root / tex_path.parent, timeout)
+        run_killing(cmd, root / tex_path.parent, timeout, env=sandbox_env(out), cpu=int(timeout or 60) + 15,
+                    mem_mb=1536, fsize_mb=200)
     except subprocess.TimeoutExpired:
         raise SystemExit(f'compiling {tex} timed out after {timeout}s')
     pdf = out / tex_path.with_suffix('.pdf').name
     if not pdf.exists():
-        raise SystemExit(f'compiling {tex} failed; see {pdf.with_suffix(".log")}')
+        detail = latex_errors(pdf.with_suffix('.log'), hide=(root.resolve(), out.resolve(), root, out))
+        raise SystemExit(f'LaTeX could not compile {tex}' + (f': {detail}' if detail else ''))
     return pdf
 
 
