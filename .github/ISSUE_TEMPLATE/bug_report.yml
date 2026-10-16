@@ -1,0 +1,27 @@
+name: Bug report
+description: The diff is wrong, missing changes, or the tool fails
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you expect, and what did you get? A screenshot of the diff page helps.
+    validations:
+      required: true
+  - type: dropdown
+    id: how
+    attributes:
+      label: How did you run it?
+      options: [Hosted web app, Self-hosted / Docker, Command line]
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction
+      description: Command, error text, or a minimal pair of .tex projects or PDFs. Only share documents you may share.
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
