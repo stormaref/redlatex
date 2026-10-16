@@ -39,4 +39,14 @@ Open an issue with:
 | `src/redlatex/web.py`, `index.html` | upload/GitHub service with background jobs, and its page |
 | `action.yml` | the GitHub Action (tested by `.github/workflows/action-test.yml` on `examples/`) |
 
+## Releasing
+
+1. Bump the version: `uv version 0.2.1` (also update `__version__` in `src/redlatex/__init__.py`).
+2. Commit, push, and create a GitHub release with the tag `v0.2.1`.
+3. `publish.yml` builds the package and uploads it to PyPI through trusted publishing; it refuses to run if the
+   tag and the package version differ. Point the README's action example at the new tag.
+
+The example paper in `examples/` is used by the action test and to build the sample diff and screenshots on the
+website and in this README.
+
 By contributing you agree that your work is released under the [MIT License](LICENSE).

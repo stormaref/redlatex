@@ -44,8 +44,9 @@ captions and bibliography entries are all compared as the reader sees them.
 Open **<https://redlatex.onrender.com>**, give it the earlier and the revised version of your document, and
 download the diff PDF. Each version can be a `.zip` of the whole project (with figures, `.bib`, styles), a
 single `.tex` file, or a branch, tag or commit of a public GitHub repository (Overleaf projects synced to GitHub
-work too; otherwise use Overleaf's *Download → Source* zip). Progress is shown step by step. Your files are deleted as soon as the diff is made. The hosted instance is small and may take a few seconds to
-wake up; for large projects or private work, run it yourself.
+work too; otherwise use Overleaf's *Download → Source* zip). Progress is shown step by step, and your files are
+deleted as soon as the diff is made. See a [sample diff PDF](https://redlatex.onrender.com/static/sample-diff.pdf)
+first if you like. The hosted instance is small; for large projects or private work, run it yourself.
 
 ## GitHub Action
 
@@ -85,32 +86,31 @@ pushes instead of piling up).
 | `artifact-name` | `redlatex-diff` | artifact name; empty to skip the upload |
 | `comment` | `true` | comment on the pull request |
 
-Outputs: `pdf` (path), `summary` (e.g. `2 spreads, -31 +95 words, 0 changed figures`) and `artifact-url`.
+Outputs: `pdf` (path), `summary` (e.g. `2 spreads, -31 +111 words, 2 changed figures`) and `artifact-url`.
 
 ## Command line
 
-Requirements: Python 3.10+, [uv](https://docs.astral.sh/uv/), and, to compile from git revisions, `git` and a
-TeX distribution with `latexmk`.
+Requirements: Python 3.10+ and, to compile from git revisions, `git` and a TeX distribution with `latexmk`
+(comparing two existing PDFs needs neither).
 
 ```bash
-uvx redlatex --help          # run without installing
-pip install redlatex         # or install it
+pip install redlatex         # or run it without installing: uvx redlatex --help
 ```
 
 Run it from the root of the git repository that holds your LaTeX project (or pass `--repo`):
 
 ```bash
 # compare a tagged revision with HEAD
-uv run redlatex --old v1 --new HEAD
+redlatex --old v1 --new HEAD
 
 # compare HEAD with the working tree (the default), main file in a subfolder
-uv run redlatex --tex paper/main.tex --out changes.pdf
+redlatex --tex paper/main.tex --out changes.pdf
 
 # compare two PDFs directly (no git, no latexmk)
-uv run redlatex --old-pdf before.pdf --new-pdf after.pdf
+redlatex --old-pdf before.pdf --new-pdf after.pdf
 
 # run against another repository
-uv run --project /path/to/redlatex redlatex --repo /path/to/paper --old v1
+redlatex --repo /path/to/paper --old v1
 ```
 
 | Option | Default | Meaning |
@@ -121,6 +121,7 @@ uv run --project /path/to/redlatex redlatex --repo /path/to/paper --old v1
 | `--new` | `WORKTREE` | revised git revision (or `WORKTREE` for the working tree) |
 | `--old-pdf`, `--new-pdf` | | use these PDFs instead of compiling |
 | `--old-label`, `--new-label` | revision or PDF name | labels in the page headers |
+| `--new-source` | | LaTeX source of the revised version, to letter appendix sections when comparing PDFs |
 | `--title` | `Document changes` | cover page title |
 | `--out` | `./revision-diff.pdf` | output PDF |
 
@@ -137,7 +138,7 @@ docker build -t redlatex .
 docker run -p 10000:10000 redlatex      # then open http://localhost:10000
 ```
 
-Without Docker: `uv sync --extra web && uv run uvicorn redlatex.web:app` (needs `latexmk` on `PATH`).
+Without Docker: `pip install "redlatex[web]" && uvicorn redlatex.web:app` (needs `latexmk` on `PATH`).
 Set `REDLATEX_PUBLIC_URL` to your site's address (e.g. `https://diff.example.org`) so link previews point at
 your own preview image.
 
@@ -152,9 +153,9 @@ The web app compiles LaTeX written by strangers, so it is locked down in layers:
 | GitHub | only `codeload.github.com` is ever contacted; owner, repository and ref names are validated, so the server cannot be pointed at other hosts; downloads are size-limited like uploads |
 | Uploads | `.zip` up to 50 MB (200 MB and 5000 files unpacked) or a `.tex` up to 5 MB; path-traversal and absolute-path checks; oversized requests refused from the `Content-Length` header before they are read |
 | Size | documents are limited to 300 pages (`REDLATEX_MAX_PAGES`) |
-| Abuse | one running diff per client IP, 20 diffs per hour per IP (`REDLATEX_RATE_PER_HOUR`), at most 2 diffs processed at once (`REDLATEX_MAX_JOBS`; others wait up to 20 s, then get a 503) |
+| Abuse | one running diff per client IP, 20 diffs per hour per IP (`REDLATEX_RATE_PER_HOUR`), at most 2 diffs processed at once (`REDLATEX_MAX_JOBS`); jobs from the page wait in a queue of at most 10 for up to 5 minutes, while `POST /diff` waits 20 s before answering 503 |
 | Browser | strict Content-Security-Policy (hash-based, no inline allowances), `nosniff`, no framing, HSTS, no referrer, no third-party requests |
-| Server | runs as a non-root user, API docs disabled, no server banner, error messages never contain server paths, temporary files removed after every request |
+| Server | runs as a non-root user, API docs disabled, no server banner, error messages never contain server paths; uploads and results are deleted once the PDF is downloaded (unfetched results after 15 minutes), job IDs are unguessable |
 
 Compiling is CPU- and memory-heavy and the service runs a single worker, so size your instance for the
 documents and traffic you expect. Report vulnerabilities as described in [SECURITY.md](SECURITY.md).
@@ -197,9 +198,9 @@ documents and traffic you expect. Report vulnerabilities as described in [SECURI
 
 - Figure changes are detected per figure, not located inside it, and very small edits (below 0.2% of a
   figure's pixels at thumbnail size) can be missed. Tables drawn only with rules are compared as text.
-- Only text is compared; purely visual changes such as colours or spacing are not marked.
-- Appendix sections are lettered only when the LaTeX source of the revised version is readable (a git
-  revision, the working tree, or an uploaded zip) and contains `\appendix`.
+- Outside figures only words are compared; purely visual changes such as colours, fonts or spacing are not marked.
+- Appendix sections are lettered only when the LaTeX source of the revised version is available (git, an
+  upload, a GitHub ref, or `--new-source`) and contains `\appendix`.
 - Compilation is a plain `latexmk -pdf` run. Documents that need another engine or special options should be
   compiled by hand and passed with `--old-pdf` / `--new-pdf`.
 
