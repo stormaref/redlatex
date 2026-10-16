@@ -91,7 +91,7 @@ docker run -p 10000:10000 redlatex      # then open http://localhost:10000
 Without Docker: `uv sync --extra web && uv run uvicorn redlatex.web:app` (needs `latexmk` on `PATH`).
 
 **Limits and safety.** Uploads are capped at 50 MB per zip (200 MB unpacked, 5000 files) and each version
-gets 60 seconds to compile (`REDLATEX_COMPILE_TIMEOUT`), and at most 2 documents compile at once (`REDLATEX_MAX_JOBS`; others wait up to 20 s, then get a 503). Archives are unpacked with path-traversal checks, LaTeX runs with shell escape off
+gets 60 seconds to compile (`REDLATEX_COMPILE_TIMEOUT`), at most 2 documents are processed at once (`REDLATEX_MAX_JOBS`; others wait up to 20 s, then get a 503), each client IP may run one diff at a time, and documents are limited to 100 pages (`REDLATEX_MAX_PAGES`) with 90 s to build the diff (`REDLATEX_RENDER_TIMEOUT`). Oversized uploads are refused from the `Content-Length` header before they are read. Archives are unpacked with path-traversal checks, LaTeX runs with shell escape off
 and with TeX file access restricted to the project (`openin_any=p`, `openout_any=p`), the container runs as a
 non-root user, and temporary files are removed after every request. Compiling is CPU- and memory-heavy and the
 service runs a single worker, so size your instance for the documents and traffic you expect.

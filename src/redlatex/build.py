@@ -35,19 +35,26 @@ def source(repo, tex, rev):
         return None
 
 
+def run_killing(cmd, cwd, timeout=None):
+    """Run `cmd` in its own session; on timeout kill the whole process group and raise TimeoutExpired."""
+    proc = subprocess.Popen(cmd, cwd=cwd, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL, start_new_session=True)
+    try:
+        return proc.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        os.killpg(proc.pid, signal.SIGKILL)
+        proc.wait()
+        raise
+
+
 def compile_tree(root, tex, out, timeout=None):
     """Compile `tex` (relative to the source tree `root`) with latexmk into `out`; return the PDF path."""
     tex_path = Path(tex)
     out.mkdir(parents=True, exist_ok=True)
     cmd = ['latexmk', '-pdf', '-interaction=nonstopmode', '-no-shell-escape', f'-outdir={out}', tex_path.name]
-    # own session, so a timeout can kill latexmk together with the pdflatex/bibtex it spawned
-    proc = subprocess.Popen(cmd, cwd=root / tex_path.parent, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                            stderr=subprocess.DEVNULL, start_new_session=True)
     try:
-        proc.wait(timeout=timeout)
+        run_killing(cmd, root / tex_path.parent, timeout)
     except subprocess.TimeoutExpired:
-        os.killpg(proc.pid, signal.SIGKILL)
-        proc.wait()
         raise SystemExit(f'compiling {tex} timed out after {timeout}s')
     pdf = out / tex_path.with_suffix('.pdf').name
     if not pdf.exists():

@@ -27,6 +27,7 @@ def main(argv=None):
     p.add_argument('--new-pdf', type=Path, help='use this PDF instead of compiling --new')
     p.add_argument('--old-label', help='label of the earlier version (default: the revision or PDF name)')
     p.add_argument('--new-label', help='label of the revised version (default: the revision or PDF name)')
+    p.add_argument('--new-source', type=Path, help='LaTeX source of the revised version, to letter appendix sections when comparing PDFs')
     p.add_argument('--title', default='Document changes', help='title of the cover page')
     p.add_argument('--out', type=Path, default=Path('revision-diff.pdf'), help='output PDF (default: ./revision-diff.pdf)')
     args = p.parse_args(argv)
@@ -41,7 +42,7 @@ def main(argv=None):
                new_label=args.new_label or (args.new_pdf.name if args.new_pdf else args.new),
                old_info=describe(repo, args.tex, args.old, args.old_pdf),
                new_info=describe(repo, args.tex, args.new, args.new_pdf),
-               new_source=source(repo, args.tex, args.new))
+               new_source=args.new_source.read_text(errors='ignore') if args.new_source else source(repo, args.tex, args.new))
 
 
 if __name__ == '__main__':

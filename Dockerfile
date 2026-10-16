@@ -29,4 +29,4 @@ ENV PATH="/app/.venv/bin:$PATH" PORT=10000
 EXPOSE 10000
 
 HEALTHCHECK --interval=30s --timeout=5s CMD python -c "import os,urllib.request as u;u.urlopen(f'http://127.0.0.1:{os.environ[\"PORT\"]}/healthz')"
-CMD ["sh", "-c", "exec uvicorn redlatex.web:app --host 0.0.0.0 --port ${PORT} --workers 1"]
+CMD ["sh", "-c", "exec uvicorn redlatex.web:app --host 0.0.0.0 --port ${PORT} --workers 1 --proxy-headers --forwarded-allow-ips='*'"]

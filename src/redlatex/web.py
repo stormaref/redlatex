@@ -2,17 +2,19 @@
 import os
 import re
 import shutil
+import subprocess
+import sys
 import tempfile
 import threading
 import zipfile
 from pathlib import Path
 
-from fastapi import FastAPI, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse
+import pymupdf
+from fastapi import FastAPI, Form, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from starlette.background import BackgroundTask
 
-from .build import compile_tree
-from .diff import render
+from .build import compile_tree, run_killing
 
 MAX_ZIP_BYTES = 50 * 1024 * 1024
 MAX_UNPACKED_BYTES = 200 * 1024 * 1024
@@ -20,11 +22,24 @@ MAX_FILES = 5000
 COMPILE_TIMEOUT = int(os.environ.get('REDLATEX_COMPILE_TIMEOUT', 60))
 MAX_JOBS = int(os.environ.get('REDLATEX_MAX_JOBS', 2))
 QUEUE_WAIT = 20
+MAX_PAGES = int(os.environ.get('REDLATEX_MAX_PAGES', 100))
+RENDER_TIMEOUT = int(os.environ.get('REDLATEX_RENDER_TIMEOUT', 90))
+MAX_BODY = 2 * MAX_ZIP_BYTES + (1 << 20)
+active = set()
+active_lock = threading.Lock()
 jobs = threading.BoundedSemaphore(MAX_JOBS)
 
 app = FastAPI(title='redlatex', docs_url=None, redoc_url=None)
 
 PAGE = (Path(__file__).parent / 'index.html').read_text()
+
+
+@app.middleware('http')
+async def limit_body(request: Request, call_next):
+    """Refuse oversized uploads from the header alone, before the body is read."""
+    if int(request.headers.get('content-length') or 0) > MAX_BODY:
+        return JSONResponse({'detail': f'upload is larger than {MAX_BODY >> 20} MB'}, status_code=413)
+    return await call_next(request)
 
 
 @app.get('/', response_class=HTMLResponse)
@@ -87,7 +102,20 @@ def find_main(root, requested):
 
 
 @app.post('/diff')
-def diff(old: UploadFile, new: UploadFile, tex: str = Form(''), title: str = Form('')):
+def diff(request: Request, old: UploadFile, new: UploadFile, tex: str = Form(''), title: str = Form('')):
+    client = request.client.host if request.client else '?'
+    with active_lock:
+        if client in active:
+            raise HTTPException(429, 'You already have a diff running. Wait for it to finish first.')
+        active.add(client)
+    try:
+        return limited_diff(old, new, tex, title)
+    finally:
+        with active_lock:
+            active.discard(client)
+
+
+def limited_diff(old, new, tex, title):
     if not jobs.acquire(timeout=QUEUE_WAIT):
         raise HTTPException(503, 'The server is busy compiling other documents. Please try again in a minute.',
                             headers={'Retry-After': '30'})
@@ -111,10 +139,22 @@ def make_diff(old, new, tex, title):
                 pdfs.append(compile_tree(root, main, work / f'{name}-out', timeout=COMPILE_TIMEOUT))
             except SystemExit as e:
                 raise HTTPException(422, f'{name} version: {e}')
+        for name, pdf in zip(('old', 'new'), pdfs):
+            with pymupdf.open(pdf) as doc:
+                if doc.page_count > MAX_PAGES:
+                    raise HTTPException(413, f'{name} version has {doc.page_count} pages; the limit is {MAX_PAGES}')
         out = work / 'redlatex-diff.pdf'
-        render(pdfs[0], pdfs[1], out, title=title.strip() or 'Document changes',
-               old_label=Path(old.filename or 'old').stem, new_label=Path(new.filename or 'new').stem,
-               old_info='uploaded zip', new_info='uploaded zip', new_source=new_source)
+        (work / 'new-source.tex').write_text(new_source or '')
+        cmd = [sys.executable, '-m', 'redlatex.cli', '--old-pdf', str(pdfs[0]), '--new-pdf', str(pdfs[1]),
+               '--new-source', str(work / 'new-source.tex'), '--out', str(out),
+               '--title', title.strip() or 'Document changes',
+               '--old-label', Path(old.filename or 'old').stem, '--new-label', Path(new.filename or 'new').stem]
+        try:
+            code = run_killing(cmd, work, RENDER_TIMEOUT)
+        except subprocess.TimeoutExpired:
+            raise HTTPException(422, f'building the diff timed out after {RENDER_TIMEOUT}s; try a shorter document')
+        if code or not out.exists():
+            raise HTTPException(500, 'building the diff failed')
     except BaseException:
         shutil.rmtree(work, ignore_errors=True)
         raise

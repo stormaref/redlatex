@@ -49,3 +49,24 @@ def test_hung_compile_is_killed_with_children(tmp_path):
     with pytest.raises(SystemExit, match='timed out'):
         compile_tree(tmp_path, 'main.tex', tmp_path / 'out', timeout=3)
     assert subprocess.run(['pgrep', '-f', f'outdir={tmp_path}'], capture_output=True).returncode == 1
+
+
+def test_oversized_body_rejected_before_reading():
+    r = client.post('/diff', content=b'x', headers={'content-length': str(300 * 1024 * 1024),
+                                                    'content-type': 'multipart/form-data; boundary=x'})
+    assert r.status_code == 413
+
+
+def test_page_cap_and_render_subprocess(monkeypatch):
+    import shutil
+    import pytest
+    if not shutil.which('latexmk'):
+        pytest.skip('latexmk not installed')
+    import redlatex.web as web
+    tex = lambda body: make_zip({'main.tex': r'\documentclass{article}\begin{document}' + body + r'\end{document}'})
+    old, new = tex('Hello world, the first version of this text.'), tex('Hello brave world, the second version of this text.')
+    r = client.post('/diff', files={'old': ('a.zip', old), 'new': ('b.zip', new)})
+    assert r.status_code == 200 and r.content.startswith(b'%PDF')
+    monkeypatch.setattr(web, 'MAX_PAGES', 0)
+    r = client.post('/diff', files={'old': ('a.zip', old), 'new': ('b.zip', new)})
+    assert r.status_code == 413 and 'limit is 0' in r.text
