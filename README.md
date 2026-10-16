@@ -136,6 +136,8 @@ docker run -p 10000:10000 redlatex      # then open http://localhost:10000
 ```
 
 Without Docker: `uv sync --extra web && uv run uvicorn redlatex.web:app` (needs `latexmk` on `PATH`).
+Set `REDLATEX_PUBLIC_URL` to your site's address (e.g. `https://diff.example.org`) so link previews point at
+your own preview image.
 
 ### Limits and security
 

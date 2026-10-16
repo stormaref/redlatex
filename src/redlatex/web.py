@@ -18,7 +18,8 @@ from pathlib import Path
 import httpx
 import pymupdf
 from fastapi import FastAPI, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse
+from fastapi.staticfiles import StaticFiles
 from starlette.background import BackgroundTask
 
 from .build import compile_tree, run_killing
@@ -46,8 +47,12 @@ recent = defaultdict(deque)
 slots = threading.BoundedSemaphore(MAX_JOBS)
 
 app = FastAPI(title='redlatex', docs_url=None, redoc_url=None, openapi_url=None)
+STATIC = Path(__file__).parent / 'static'
+app.mount('/static', StaticFiles(directory=STATIC), name='static')
 
-PAGE = (Path(__file__).parent / 'index.html').read_text()
+# absolute URL of the site, for link previews (Open Graph / Twitter cards need absolute image URLs)
+PUBLIC_URL = os.environ.get('REDLATEX_PUBLIC_URL', 'https://redlatex.onrender.com').rstrip('/')
+PAGE = (Path(__file__).parent / 'index.html').read_text().replace('{{BASE}}', PUBLIC_URL)
 
 
 def _hashes(tag):
@@ -81,7 +86,10 @@ async def guard(request: Request, call_next):
     else:
         response = await call_next(request)
     response.headers.update(HEADERS)
-    if request.url.path == '/':
+    path = request.url.path
+    if path.startswith('/static/') or path in ('/favicon.ico', '/apple-touch-icon.png'):
+        response.headers.setdefault('Cache-Control', 'public, max-age=86400')
+    if path == '/':
         response.headers['Content-Security-Policy'] = PAGE_CSP
     else:
         response.headers['Content-Security-Policy'] = "default-src 'none'; frame-ancestors 'none'"
@@ -91,6 +99,21 @@ async def guard(request: Request, call_next):
 @app.get('/', response_class=HTMLResponse)
 def index():
     return PAGE
+
+
+@app.get('/favicon.ico', include_in_schema=False)
+def favicon():
+    return FileResponse(STATIC / 'favicon-32.png', media_type='image/png')
+
+
+@app.get('/apple-touch-icon.png', include_in_schema=False)
+def touch_icon():
+    return FileResponse(STATIC / 'apple-touch-icon.png', media_type='image/png')
+
+
+@app.get('/robots.txt', response_class=PlainTextResponse)
+def robots():
+    return 'User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /diff\n'
 
 
 @app.get('/healthz')

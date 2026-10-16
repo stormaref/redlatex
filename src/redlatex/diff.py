@@ -361,7 +361,10 @@ def frame(doc, figs, color, label):
         page = doc[pno]
         box = r + (-3, -3, 3, 3)
         page.draw_rect(box, color=color, width=1.6, dashes='[5 3] 0')
-        page.insert_text((box.x0, box.y0 - 3), label, fontsize=7, fontname='hebo', color=color)
+        # a solid tag on the top-right corner stays legible over axis labels (usually top-left)
+        w = pymupdf.get_text_length(label, fontname='hebo', fontsize=6.5) + 6
+        page.draw_rect(pymupdf.Rect(box.x1 - w, box.y0 - 9, box.x1, box.y0), color=None, fill=color)
+        page.insert_text((box.x1 - w + 3, box.y0 - 2.2), label, fontsize=6.5, fontname='hebo', color=(1, 1, 1))
         page.draw_rect(pymupdf.Rect(28, box.y0, 31.5, box.y1), color=None, fill=color)
 
 
@@ -475,8 +478,8 @@ def render(old_pdf, new_pdf, out_path, title, old_label, new_label, old_info, ne
 
     mark(old_doc, removed, RED_FILL, RED, old_markers)
     mark(new_doc, added, GREEN_FILL, GREEN, new_markers)
-    frame(old_doc, figs_old, RED, 'FIGURE CHANGED OR REMOVED')
-    frame(new_doc, figs_new, GREEN, 'FIGURE CHANGED OR ADDED')
+    frame(old_doc, figs_old, RED, 'FIGURE CHANGED')
+    frame(new_doc, figs_new, GREEN, 'FIGURE CHANGED')
 
     W, H = new_doc[0].rect.width, new_doc[0].rect.height
     PW, PH = 2 * W + GUTTER, H + HEADER

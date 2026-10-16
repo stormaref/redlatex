@@ -191,3 +191,20 @@ def test_github_job_with_fake_download(monkeypatch, tmp_path):
             break
         _t.sleep(0.1)
     assert st['state'] == 'done', st
+
+
+def test_link_preview_meta_and_static_assets():
+    import re as _re
+    html = client.get('/').text
+    assert '{{BASE}}' not in html
+    og = _re.search(r'<meta property="og:image" content="([^"]+)"', html).group(1)
+    assert og.startswith('https://') and og.endswith('/static/og.png')
+    for tag in ('og:title', 'og:description', 'og:url', 'twitter:card', 'twitter:image'):
+        assert tag in html
+    for path in ['/static/og.png', '/static/feat-words.png', '/static/sample-diff.pdf', '/favicon.ico',
+                 '/apple-touch-icon.png', '/robots.txt']:
+        r = client.get(path)
+        assert r.status_code == 200, path
+    assert 'max-age' in client.get('/static/og.png').headers['cache-control']
+    imgs = _re.findall(r'src="(/static/[^"]+)"', html)
+    assert imgs and all(client.get(i).status_code == 200 for i in imgs)

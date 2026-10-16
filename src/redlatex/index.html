@@ -3,8 +3,29 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>redlatex: visual diffs for LaTeX</title>
-<meta name="description" content="Upload two versions of a LaTeX project and get a side-by-side, word-level diff PDF.">
+<title>redlatex: see what changed in your LaTeX paper</title>
+<meta name="description" content="Free, open-source visual diff for LaTeX. Compare two versions of a paper side by side: changed words in red and green, changed figures framed, moved text ignored, a summary per section. Upload a .zip or .tex, or use a GitHub repo.">
+<link rel="canonical" href="{{BASE}}/">
+<meta name="theme-color" content="#0f0e0d">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="redlatex">
+<meta property="og:url" content="{{BASE}}/">
+<meta property="og:title" content="redlatex: see exactly what changed in your LaTeX paper">
+<meta property="og:description" content="Side-by-side, word-level diff of two compiled versions of a LaTeX document. Changed words, changed figures, moved text ignored, per-section summary. Free and open source.">
+<meta property="og:image" content="{{BASE}}/static/og.png">
+<meta property="og:image:secure_url" content="{{BASE}}/static/og.png">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="redlatex: a LaTeX paper diff with removed words in red, added words in green and a changed plot framed">
+<meta property="og:locale" content="en_US">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="redlatex: see exactly what changed in your LaTeX paper">
+<meta name="twitter:description" content="Side-by-side, word-level diff of two compiled LaTeX versions. Changed words, changed figures, per-section summary. Free and open source.">
+<meta name="twitter:image" content="{{BASE}}/static/og.png">
+<meta name="twitter:image:alt" content="redlatex: a LaTeX paper diff with removed words in red and added words in green">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"WebApplication","name":"redlatex","url":"{{BASE}}/","applicationCategory":"DeveloperApplication","operatingSystem":"Any","description":"Side-by-side, word-level visual diff of two compiled versions of a LaTeX document.","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"isAccessibleForFree":true,"license":"https://opensource.org/licenses/MIT","codeRepository":"https://github.com/stormaref/redlatex"}</script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='16' height='32' fill='%23e5484d'/%3E%3Crect x='16' width='16' height='32' fill='%2330a46c'/%3E%3C/svg%3E">
 <style>
 :root{
@@ -90,7 +111,32 @@ footer a{color:inherit}
 .steps li.done{color:var(--ink)}
 .steps li.done::before{border-color:var(--green);background:var(--green);box-shadow:inset 0 0 0 2px var(--card)}
 .steps .t{margin-left:auto;font:500 .8rem ui-monospace,monospace;color:var(--muted)}
-@media (max-width:560px){.drops,.opts,.how,.gh{grid-template-columns:1fr}.drop{min-height:8.5rem}}
+.sample{display:inline-block;margin-top:.9rem;font-size:.92rem;color:var(--ink);text-decoration:none;border-bottom:1px solid var(--line)}
+.sample:hover{border-color:var(--ink)}
+section.feats{margin-top:4rem}
+section.feats>h2,section.example>h2{font-size:1.5rem;letter-spacing:-.02em;margin:0 0 .4rem;text-align:center}
+section.feats>p.lead,section.example>p.lead{color:var(--muted);text-align:center;margin:0 auto 1.8rem;max-width:32rem}
+.grid{display:grid;grid-template-columns:1fr;gap:1rem}
+.feat{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:1.2rem 1.2rem 1.25rem;box-shadow:var(--shadow)}
+.feat.wide{grid-column:1/-1}
+.feat h3{margin:0 0 .3rem;font-size:1.05rem;display:flex;align-items:center;gap:.5rem}
+.feat p{margin:0 0 1rem;color:var(--muted);font-size:.93rem}
+.feat .dot{width:.6rem;height:.6rem;border-radius:50%;background:var(--c,var(--ink));flex:none}
+.feat.r{--c:var(--red)} .feat.g{--c:var(--green)}
+img.narrow{max-width:30rem;margin:0 auto}
+.mini a{color:var(--ink)}
+.shot{display:block;width:100%;height:auto;border-radius:10px;border:1px solid var(--line);background:#fff}
+.minis{display:grid;grid-template-columns:repeat(2,1fr);gap:1rem;margin-top:1rem}
+.mini{border:1px solid var(--line);border-radius:14px;padding:1rem 1.1rem}
+.mini b{display:block;margin-bottom:.2rem}
+.mini span{color:var(--muted);font-size:.9rem}
+.mini code{font:.82rem ui-monospace,Menlo,monospace;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:.05rem .3rem}
+section.example{margin-top:4rem}
+.example a{display:block;border-radius:14px;overflow:hidden;border:1px solid var(--line);box-shadow:var(--shadow);background:#fff}
+.example img{display:block;width:100%;height:auto}
+.example .cta{display:block;text-align:center;margin-top:1rem}
+.example .cta a{display:inline-block;border:0;box-shadow:none;background:var(--accent);color:var(--accent-ink);padding:.7rem 1.2rem;border-radius:10px;font-weight:600;text-decoration:none}
+@media (max-width:560px){.drops,.opts,.how,.gh,.grid,.minis{grid-template-columns:1fr}.drop{min-height:8.5rem}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
@@ -99,6 +145,7 @@ footer a{color:inherit}
   <header>
     <div class="logo"><span class="r">red</span><span class="g">latex</span></div>
     <p>See exactly what changed between two versions of your LaTeX paper, word by word, side by side.</p>
+    <a class="sample" href="#example">See an example diff ↓</a>
   </header>
 
   <form id="f" autocomplete="off">
@@ -173,6 +220,46 @@ footer a{color:inherit}
     <li><b>We compile them</b>With latexmk, then compare the words and figures in the PDFs.</li>
     <li><b>Read the changes</b>Red on the left, green on the right, with a summary per section.</li>
   </ol>
+  <section class="feats" aria-labelledby="feats-h">
+    <h2 id="feats-h">What it catches</h2>
+    <p class="lead">redlatex compares what a reader sees, the compiled pages, not the LaTeX source. These are real crops from its output.</p>
+    <div class="grid">
+      <article class="feat wide r">
+        <h3><span class="dot"></span>Every changed word, in place</h3>
+        <p>Removed words are highlighted in red on the earlier page and added words in green on the revised page, with a bar in the margin beside each changed line.</p>
+        <img class="shot" src="/static/feat-words.png" width="944" height="468" loading="lazy" alt="A paragraph before and after: 'little attention' and 'is hard to train' in red, their replacements in green">
+      </article>
+      <article class="feat g">
+        <h3><span class="dot"></span>Changed figures, pixel by pixel</h3>
+        <p>Plots, diagrams and images are compared as rendered pixels. A figure that changed gets a dashed frame on both sides, even when it has no text.</p>
+        <img class="shot" src="/static/feat-figure.png" width="982" height="346" loading="lazy" alt="A loss plot whose curve changed, framed in red before and green after">
+      </article>
+      <article class="feat">
+        <h3><span class="dot"></span>Moved text is not an edit</h3>
+        <p>When LaTeX moves a table or figure, or you move a paragraph, only what actually changed is marked. Here, just the new numbers.</p>
+        <img class="shot narrow" src="/static/feat-table.png" width="682" height="471" loading="lazy" alt="A results table before and after: only the changed numbers are highlighted">
+      </article>
+      <article class="feat wide">
+        <h3><span class="dot"></span>A summary per section</h3>
+        <p>The first page counts removed and added words for every section, with links to the right page, and the PDF has a bookmark per section.</p>
+        <img class="shot" src="/static/feat-cover.png" width="976" height="164" loading="lazy" alt="Cover page listing sections with removed and added word counts">
+      </article>
+    </div>
+    <div class="minis">
+      <div class="mini"><b>Any input</b><span>A .zip of the project, a single .tex file, two refs of a public GitHub repo, or an Overleaf source zip.</span></div>
+      <div class="mini"><b>On every pull request</b><span>The <a href="https://github.com/stormaref/redlatex#github-action">GitHub Action</a> comments a diff PDF on PRs that touch your paper.</span></div>
+      <div class="mini"><b>Fast</b><span>Hundreds of pages are compared in seconds; documents up to 300 pages.</span></div>
+      <div class="mini"><b>Private and open source</b><span>Files are deleted right after your diff is made. MIT licensed; run it yourself with <code>docker run</code>.</span></div>
+    </div>
+  </section>
+
+  <section class="example" id="example" aria-labelledby="ex-h">
+    <h2 id="ex-h">A real example</h2>
+    <p class="lead">A short paper, from submitted draft to camera-ready version.</p>
+    <a href="/static/sample-diff.pdf" target="_blank" rel="noopener"><img src="/static/example.png" width="1662" height="1025" loading="lazy" alt="A full diff spread: submitted draft on the left with removals in red, camera-ready version on the right with additions in green"></a>
+    <div class="cta"><a href="/static/sample-diff.pdf" target="_blank" rel="noopener">Open the full sample PDF</a></div>
+  </section>
+
   <footer>Files are deleted right after your diff is made. <a href="https://github.com/stormaref/redlatex">Open source on GitHub</a></footer>
 </main>
 
