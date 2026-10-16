@@ -15,6 +15,8 @@ A side-by-side, word-level visual diff of compiled PDFs, with changes highlighte
 
 ![A redlatex spread: the submitted draft on the left with removed words in red, the camera-ready version on the right with added words in green](docs/example.png)
 
+![The second spread: the unchanged diagram is left alone, the changed plot is framed, only the changed table numbers are highlighted](docs/example-figures.png)
+
 <p align="center"><img src="docs/cover.png" alt="The cover page: words removed and added per section, each linking to its spread" width="760"></p>
 
 ## Why

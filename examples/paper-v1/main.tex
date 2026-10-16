@@ -1,6 +1,7 @@
 \documentclass[11pt]{article}
 \usepackage[margin=1in]{geometry}
-\usepackage{amsmath,booktabs}
+\usepackage{amsmath,booktabs,tikz}
+\usetikzlibrary{positioning}
 \usepackage[hidelinks]{hyperref}
 \title{Faster Convergence of Sparse Attention\\through Adaptive Token Pruning}
 \author{Ada Lindqvist \and Rafael Moreno}
@@ -28,6 +29,20 @@ Our contributions are a pruning rule that needs no extra parameters, an analysis
 gradient flow, and experiments showing faster convergence on three benchmarks.
 
 \section{Method}
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[blk/.style={draw,rounded corners=2pt,fill=gray!12,minimum width=1.55cm,minimum height=.75cm,font=\small},>=stealth]
+\node[blk] (in) {Tokens};
+\node[blk,right=.55cm of in] (b1) {Block 1};
+\node[blk,right=.55cm of b1,fill=red!10] (p1) {Prune};
+\node[blk,right=.55cm of p1] (b2) {Block 2};
+\node[blk,right=.55cm of b2,fill=red!10] (p2) {Prune};
+\node[blk,right=.55cm of p2] (out) {Output};
+\foreach \a/\b in {in/b1,b1/p1,p1/b2,b2/p2,p2/out} \draw[->] (\a) -- (\b);
+\end{tikzpicture}
+\caption{Adaptive token pruning between transformer blocks.}
+\label{fig:arch}
+\end{figure}
 For a sequence of hidden states $h_1, \dots, h_n$ at layer $\ell$, we define the importance of token $i$
 as the total attention it receives:
 \begin{equation}
@@ -41,7 +56,24 @@ output layer by copying their last hidden state, so the model still produces a p
 We train 350M-parameter models on WikiText-103, The Pile and C4 for 50{,}000 steps with a batch size of
 256 sequences. Table~\ref{tab:main} compares perplexity and wall-clock training time.
 
-\begin{table}[h]
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[x=1.1cm,y=.55cm]
+\draw[->] (0,0) -- (5.4,0);
+\node[font=\small] at (2.7,-1.25) {training steps (10k)};
+\draw[->] (0,0) -- (0,6.4) node[above,font=\small] {validation perplexity};
+\foreach \x in {1,...,5} \draw (\x,0) -- (\x,-.12) node[below,font=\scriptsize] {\x};
+\foreach \y/\l in {1/18,3/22,5/26} \draw (0,\y) -- (-.08,\y) node[left,font=\scriptsize] {\l};
+\draw[thick,gray] plot[smooth] coordinates {(0.2,6.1) (1,3.6) (2,2.2) (3,1.5) (4,1.2) (5,1.1)};
+\draw[thick,red!75!black] plot[smooth] coordinates {(0.2,6.1) (1,4.0) (2,2.6) (3,1.8) (4,1.4) (5,1.25)};
+\node[font=\scriptsize,gray,anchor=west] at (3.2,2.4) {dense};
+\node[font=\scriptsize,red!75!black,anchor=west] at (1.15,1.25) {pruned};
+\end{tikzpicture}
+\caption{Validation perplexity on WikiText-103 during training.}
+\label{fig:curve}
+\end{figure}
+
+\begin{table}[!htb]
 \centering
 \caption{Perplexity and training time on three benchmarks.}
 \label{tab:main}
