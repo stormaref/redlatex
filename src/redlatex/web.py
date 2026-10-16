@@ -1,7 +1,9 @@
 """Web front end: upload two zipped LaTeX projects, get back the diff PDF."""
+import os
 import re
 import shutil
 import tempfile
+import threading
 import zipfile
 from pathlib import Path
 
@@ -15,7 +17,10 @@ from .diff import render
 MAX_ZIP_BYTES = 50 * 1024 * 1024
 MAX_UNPACKED_BYTES = 200 * 1024 * 1024
 MAX_FILES = 5000
-COMPILE_TIMEOUT = 180
+COMPILE_TIMEOUT = int(os.environ.get('REDLATEX_COMPILE_TIMEOUT', 60))
+MAX_JOBS = int(os.environ.get('REDLATEX_MAX_JOBS', 2))
+QUEUE_WAIT = 20
+jobs = threading.BoundedSemaphore(MAX_JOBS)
 
 app = FastAPI(title='redlatex', docs_url=None, redoc_url=None)
 
@@ -83,6 +88,16 @@ def find_main(root, requested):
 
 @app.post('/diff')
 def diff(old: UploadFile, new: UploadFile, tex: str = Form(''), title: str = Form('')):
+    if not jobs.acquire(timeout=QUEUE_WAIT):
+        raise HTTPException(503, 'The server is busy compiling other documents. Please try again in a minute.',
+                            headers={'Retry-After': '30'})
+    try:
+        return make_diff(old, new, tex, title)
+    finally:
+        jobs.release()
+
+
+def make_diff(old, new, tex, title):
     work = Path(tempfile.mkdtemp(prefix='redlatex-'))
     cleanup = BackgroundTask(shutil.rmtree, work, ignore_errors=True)
     try:

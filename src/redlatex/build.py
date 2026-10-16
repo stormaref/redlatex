@@ -1,4 +1,6 @@
 """Obtaining the two PDFs: compile a git revision (or the working tree) with latexmk."""
+import os
+import signal
 import subprocess
 from datetime import date
 from pathlib import Path
@@ -38,10 +40,14 @@ def compile_tree(root, tex, out, timeout=None):
     tex_path = Path(tex)
     out.mkdir(parents=True, exist_ok=True)
     cmd = ['latexmk', '-pdf', '-interaction=nonstopmode', '-no-shell-escape', f'-outdir={out}', tex_path.name]
+    # own session, so a timeout can kill latexmk together with the pdflatex/bibtex it spawned
+    proc = subprocess.Popen(cmd, cwd=root / tex_path.parent, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL, start_new_session=True)
     try:
-        subprocess.run(cmd, cwd=root / tex_path.parent, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                       stderr=subprocess.DEVNULL, timeout=timeout)
+        proc.wait(timeout=timeout)
     except subprocess.TimeoutExpired:
+        os.killpg(proc.pid, signal.SIGKILL)
+        proc.wait()
         raise SystemExit(f'compiling {tex} timed out after {timeout}s')
     pdf = out / tex_path.with_suffix('.pdf').name
     if not pdf.exists():
