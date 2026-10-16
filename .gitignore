@@ -26,3 +26,4 @@ dist/
 
 # macOS
 .DS_Store
+!src/redlatex/static/*.pdf
