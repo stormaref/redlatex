@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>redlatex: visual diffs for LaTeX</title>
+<meta name="description" content="Upload two versions of a LaTeX project and get a side-by-side, word-level diff PDF.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='16' height='32' fill='%23e5484d'/%3E%3Crect x='16' width='16' height='32' fill='%2330a46c'/%3E%3C/svg%3E">
+<style>
+:root{
+  --bg:#fafaf9; --card:#fff; --ink:#1c1917; --muted:#78716c; --line:#e7e5e4;
+  --red:#d6403f; --red-bg:#fdf0ef; --red-line:#f3c4c2;
+  --green:#1f8a5b; --green-bg:#edf8f2; --green-line:#b5e0c9;
+  --accent:#1c1917; --accent-ink:#fff; --shadow:0 1px 2px rgb(0 0 0/.04),0 8px 30px rgb(0 0 0/.06);
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#0f0e0d; --card:#1a1816; --ink:#f5f5f4; --muted:#a8a29e; --line:#2e2a27;
+  --red:#ff7b78; --red-bg:#2a1716; --red-line:#5a2b29;
+  --green:#4cc38a; --green-bg:#13241c; --green-line:#24543d;
+  --accent:#f5f5f4; --accent-ink:#1c1917; --shadow:0 8px 30px rgb(0 0 0/.4);
+}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  -webkit-font-smoothing:antialiased}
+main{max-width:46rem;margin:0 auto;padding:clamp(2rem,6vw,4.5rem) 1.25rem 3rem}
+header{text-align:center;margin-bottom:2.25rem}
+.logo{font:700 clamp(2.2rem,6vw,3rem)/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:-.04em}
+.logo .r{color:var(--red)} .logo .g{color:var(--green)}
+header p{color:var(--muted);margin:.8rem auto 0;max-width:30rem;font-size:1.05rem}
+form{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:1.5rem;box-shadow:var(--shadow)}
+.drops{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+.drop{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;
+  min-height:11rem;padding:1.25rem 1rem;border:2px dashed var(--c-line);border-radius:14px;background:var(--c-bg);
+  cursor:pointer;transition:transform .12s,border-color .12s,box-shadow .12s}
+.drop:hover,.drop:focus-within,.drop.over{border-style:solid;border-color:var(--c);transform:translateY(-1px)}
+.drop:focus-within{box-shadow:0 0 0 3px var(--c-line)}
+.drop.before{--c:var(--red);--c-bg:var(--red-bg);--c-line:var(--red-line)}
+.drop.after{--c:var(--green);--c-bg:var(--green-bg);--c-line:var(--green-line)}
+.drop input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.tag{font:700 .72rem/1 ui-sans-serif,system-ui,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:var(--c)}
+.drop h2{margin:.35rem 0 .1rem;font-size:1.1rem}
+.drop{font-weight:400}.hint{color:var(--muted);font-size:.9rem}
+.file{display:none;margin-top:.4rem;font:600 .9rem ui-monospace,Menlo,monospace;color:var(--c);word-break:break-all}
+.drop.has .hint{display:none} .drop.has .file{display:block}
+.icon{width:30px;height:30px;color:var(--c);margin-bottom:.4rem}
+details{margin-top:1.1rem;color:var(--muted)}
+summary{cursor:pointer;font-size:.92rem;user-select:none}
+.opts{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:.8rem}
+label{display:block;font-size:.85rem;font-weight:600;color:var(--ink);margin-bottom:.3rem}
+label small{font-weight:400;color:var(--muted)}
+input[type=text]{width:100%;padding:.6rem .75rem;font:inherit;color:var(--ink);background:var(--bg);
+  border:1px solid var(--line);border-radius:10px}
+input[type=text]:focus{outline:2px solid var(--accent);outline-offset:1px}
+button.go{width:100%;margin-top:1.3rem;padding:.95rem 1rem;font-family:inherit;font-size:1.05rem;font-weight:600;border:0;border-radius:12px;
+  background:var(--accent);color:var(--accent-ink);cursor:pointer;transition:opacity .12s,transform .12s}
+button.go:hover:not(:disabled){transform:translateY(-1px)} button.go:disabled{opacity:.45;cursor:not-allowed}
+button.go.busy{cursor:progress;opacity:.85}
+.spin{display:inline-block;width:1em;height:1em;margin-right:.55em;vertical-align:-.15em;border:2px solid currentColor;
+  border-right-color:transparent;border-radius:50%;animation:s .7s linear infinite}
+@keyframes s{to{transform:rotate(360deg)}}
+.msg{margin-top:1.1rem;padding:.8rem 1rem;border-radius:12px;font-size:.95rem;display:none}
+.msg.err{display:block;background:var(--red-bg);border:1px solid var(--red-line);color:var(--red)}
+.msg.note{display:block;background:var(--bg);border:1px solid var(--line);color:var(--muted)}
+#result{display:none;margin-top:1.5rem}
+#result.show{display:block}
+.rbar{display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;margin-bottom:.8rem}
+.rbar strong{font-size:1.1rem}
+a.dl{display:inline-block;padding:.6rem 1.1rem;border-radius:10px;background:var(--green);color:#fff;text-decoration:none;font-weight:600}
+iframe{width:100%;height:70vh;min-height:26rem;border:1px solid var(--line);border-radius:12px;background:#fff}
+.how{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin:2.5rem 0 0;padding:0;list-style:none;counter-reset:n}
+.how li{counter-increment:n;color:var(--muted);font-size:.92rem}
+.how li::before{content:counter(n);display:block;font:700 .8rem ui-monospace,monospace;color:var(--ink);margin-bottom:.35rem}
+.how b{color:var(--ink);display:block}
+footer{text-align:center;color:var(--muted);font-size:.85rem;margin-top:2.5rem}
+footer a{color:inherit}
+@media (max-width:560px){.drops,.opts,.how{grid-template-columns:1fr}.drop{min-height:8.5rem}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="logo"><span class="r">red</span><span class="g">latex</span></div>
+    <p>See exactly what changed between two versions of your LaTeX paper, word by word, side by side.</p>
+  </header>
+
+  <form id="f" autocomplete="off">
+    <div class="drops">
+      <label class="drop before" id="d-old">
+        <input type="file" name="old" accept=".zip,application/zip" required aria-label="Earlier version zip">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4m0 0L7 9m5-5 5 5M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>
+        <span class="tag">Before</span>
+        <h2>Earlier version</h2>
+        <span class="hint">Drop a .zip here or click to browse</span>
+        <span class="file"></span>
+      </label>
+      <label class="drop after" id="d-new">
+        <input type="file" name="new" accept=".zip,application/zip" required aria-label="Revised version zip">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4m0 0L7 9m5-5 5 5M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>
+        <span class="tag">After</span>
+        <h2>Revised version</h2>
+        <span class="hint">Drop a .zip here or click to browse</span>
+        <span class="file"></span>
+      </label>
+    </div>
+
+    <details>
+      <summary>Options</summary>
+      <div class="opts">
+        <div><label for="tex">Main .tex file <small>(auto-detected)</small></label>
+          <input type="text" id="tex" name="tex" placeholder="main.tex"></div>
+        <div><label for="title">Cover title</label>
+          <input type="text" id="title" name="title" placeholder="Document changes"></div>
+      </div>
+    </details>
+
+    <button class="go" id="go" type="submit" disabled>Create diff PDF</button>
+    <div class="msg" id="msg" role="status" aria-live="polite"></div>
+
+    <section id="result">
+      <div class="rbar"><strong>Your diff is ready</strong><a class="dl" id="dl" download="redlatex-diff.pdf">Download PDF</a></div>
+      <iframe id="pv" title="Diff preview"></iframe>
+    </section>
+  </form>
+
+  <ol class="how">
+    <li><b>Zip both versions</b>The whole project folder: .tex, figures, .bib, styles.</li>
+    <li><b>We compile them</b>With latexmk, then compare the words in the PDFs.</li>
+    <li><b>Read the changes</b>Red on the left, green on the right, with a summary per section.</li>
+  </ol>
+  <footer>Files are deleted right after your diff is made. <a href="https://github.com/stormaref/redlatex">Open source on GitHub</a></footer>
+</main>
+
+<script>
+const f = document.getElementById('f'), go = document.getElementById('go'), msg = document.getElementById('msg');
+const result = document.getElementById('result'), dl = document.getElementById('dl'), pv = document.getElementById('pv');
+let url = null;
+
+function sync(drop) {
+  const input = drop.querySelector('input'), name = input.files[0] && input.files[0].name;
+  drop.classList.toggle('has', !!name);
+  drop.querySelector('.file').textContent = name || '';
+  go.disabled = !(f.old.files.length && f.new.files.length);
+}
+for (const drop of document.querySelectorAll('.drop')) {
+  const input = drop.querySelector('input');
+  input.addEventListener('change', () => sync(drop));
+  for (const ev of ['dragenter', 'dragover']) drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); });
+  for (const ev of ['dragleave', 'drop']) drop.addEventListener(ev, () => drop.classList.remove('over'));
+  drop.addEventListener('drop', e => {
+    e.preventDefault();
+    if (e.dataTransfer.files.length) { input.files = e.dataTransfer.files; sync(drop); }
+  });
+}
+function show(kind, text) { msg.className = 'msg ' + kind; msg.textContent = text; }
+
+f.addEventListener('submit', async e => {
+  e.preventDefault();
+  result.classList.remove('show');
+  if (url) { URL.revokeObjectURL(url); url = null; }
+  go.disabled = true; go.classList.add('busy');
+  go.innerHTML = '<span class="spin"></span>Compiling both versions…';
+  show('note', 'This usually takes under a minute, longer for big projects. Keep this tab open.');
+  try {
+    const r = await fetch('/diff', { method: 'POST', body: new FormData(f) });
+    if (!r.ok) {
+      let detail = 'Something went wrong (HTTP ' + r.status + ').';
+      try { const j = await r.json(); if (typeof j.detail === 'string') detail = j.detail; } catch (_) {}
+      throw new Error(detail);
+    }
+    url = URL.createObjectURL(await r.blob());
+    dl.href = url; pv.src = url;
+    result.classList.add('show');
+    msg.className = 'msg';
+    result.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch (err) {
+    show('err', err.message || 'Network error, please try again.');
+  } finally {
+    go.classList.remove('busy'); go.textContent = 'Create diff PDF';
+    go.disabled = !(f.old.files.length && f.new.files.length);
+  }
+});
+</script>
+</body>
+</html>

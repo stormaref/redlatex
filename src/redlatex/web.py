@@ -19,26 +19,7 @@ COMPILE_TIMEOUT = 180
 
 app = FastAPI(title='redlatex', docs_url=None, redoc_url=None)
 
-PAGE = """<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>redlatex</title>
-<style>
-body{font:16px/1.5 system-ui,sans-serif;max-width:36rem;margin:3rem auto;padding:0 1rem;color:#222}
-h1{margin-bottom:.2rem} .sub{color:#666;margin-top:0}
-label{display:block;margin:1rem 0 .25rem;font-weight:600} input[type=text],input[type=file]{width:100%}
-button{margin-top:1.5rem;padding:.6rem 1.2rem;font-size:1rem;cursor:pointer}
-small{color:#666;font-weight:400}
-</style></head><body>
-<h1>redlatex</h1>
-<p class="sub">Upload two versions of a LaTeX project as .zip files and get a side-by-side, word-level diff PDF.</p>
-<form method="post" action="/diff" enctype="multipart/form-data" onsubmit="b.disabled=true;b.textContent='Compiling... this can take a minute'">
-<label>Earlier version (.zip)</label><input type="file" name="old" accept=".zip" required>
-<label>Revised version (.zip)</label><input type="file" name="new" accept=".zip" required>
-<label>Main .tex file <small>(optional, auto-detected)</small></label><input type="text" name="tex" placeholder="main.tex">
-<label>Title <small>(optional)</small></label><input type="text" name="title" placeholder="Document changes">
-<button id="b" type="submit">Create diff PDF</button>
-</form>
-</body></html>"""
+PAGE = (Path(__file__).parent / 'index.html').read_text()
 
 
 @app.get('/', response_class=HTMLResponse)

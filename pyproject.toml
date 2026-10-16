@@ -10,11 +10,18 @@ requires-python = ">=3.10"
 dependencies = [
     "pymupdf>=1.28.2",
 ]
-keywords = ["latex", "pdf", "diff", "revision", "manuscript"]
+keywords = ["latex", "pdf", "diff", "revision", "manuscript", "latexdiff", "redline"]
 classifiers = [
     "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Intended Audience :: Science/Research",
     "Topic :: Text Processing :: Markup :: LaTeX",
 ]
+
+[project.urls]
+Homepage = "https://github.com/stormaref/redlatex"
+Issues = "https://github.com/stormaref/redlatex/issues"
+Demo = "https://redlatex.onrender.com"
 
 [project.optional-dependencies]
 web = [
@@ -32,6 +39,7 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/redlatex"]
+include = ["src/redlatex/index.html"]
 
 [dependency-groups]
 dev = [

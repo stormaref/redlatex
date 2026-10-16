@@ -1,34 +1,56 @@
+<div align="center">
+
 # redlatex
 
-Render a side-by-side, word-level visual diff of two compiled versions of a LaTeX document.
+**See exactly what changed between two versions of your LaTeX paper.**<br>
+A side-by-side, word-level visual diff of compiled PDFs, with changes highlighted in red and green.
 
-Every page of the revised PDF is shown next to the matching page of the earlier version. Removed text is
-highlighted in red on the left page, added text in green on the right page, with a margin bar beside every
-changed line and a caret where text is missing on one side. The output PDF starts with a cover page that
-lists the number of removed and added words per section (each entry links to the matching spread), and
-it carries a bookmark per section.
+[![CI](https://github.com/stormaref/redlatex/actions/workflows/ci.yml/badge.svg)](https://github.com/stormaref/redlatex/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)
 
-## Requirements
+[**Try it online**](https://redlatex.onrender.com) · [Command line](#command-line) · [Self-host](#self-hosting) · [How it works](#how-it-works)
 
-- A TeX distribution with `latexmk` on `PATH` (only needed when compiling from git revisions)
-- `git` on `PATH`
-- Python 3.10+, managed with [uv](https://docs.astral.sh/uv/); the only dependency is
-  [PyMuPDF](https://pymupdf.readthedocs.io/)
+</div>
 
-## Install
+![A redlatex spread: removed words in red on the left page, added words in green on the right page](docs/example.png)
 
-```
-git clone <this repository> redlatex
+## Why
+
+`latexdiff` compares LaTeX *source*, which breaks on custom macros, `\input` trees and `\newcommand`s, and tells
+you nothing about what a reader sees. Reviewers and co-authors want to see the change on the page.
+
+redlatex compiles both versions and compares the **words in the rendered PDFs**. Numbers, resolved references,
+captions and bibliography entries are all compared as the reader sees them.
+
+- **Side by side.** Every revised page sits next to its matching earlier page.
+- **Word-level.** Removed words are red on the left, added words green on the right, with a margin bar beside
+  each changed line and a caret where text is missing on the other side.
+- **Cover summary.** The first page counts removed and added words per section, each linking to its spread.
+  The output also carries a bookmark per section.
+- **Robust to layout.** Floats that move, words hyphenated across lines and page numbers do not show up as edits.
+- **No LaTeX source parsing.** If it compiles, it can be diffed. You can also diff two existing PDFs.
+
+## Use it online
+
+Open **<https://redlatex.onrender.com>**, drop in the two versions of your project as `.zip` files, and download
+the diff PDF. Files are deleted as soon as the diff is made. The hosted instance is small and may take a few
+seconds to wake up; for large projects or private work, run it yourself.
+
+## Command line
+
+Requirements: Python 3.10+, [uv](https://docs.astral.sh/uv/), and, to compile from git revisions, `git` and a
+TeX distribution with `latexmk`.
+
+```bash
+git clone https://github.com/stormaref/redlatex
 cd redlatex
 uv sync
 ```
 
-## Usage
+Run it from the root of the git repository that holds your LaTeX project (or pass `--repo`):
 
-Run it from the root of the git repository that holds your LaTeX project (or pass `--repo`). From the
-tool's own directory, point uv at it with `--project`:
-
-```
+```bash
 # compare a tagged revision with HEAD
 uv run redlatex --old v1 --new HEAD
 
@@ -53,65 +75,60 @@ uv run --project /path/to/redlatex redlatex --repo /path/to/paper --old v1
 | `--title` | `Document changes` | cover page title |
 | `--out` | `./revision-diff.pdf` | output PDF |
 
-Revisions are compiled with `latexmk -pdf` in temporary directories; a revision is exported with
-`git archive`, and the working tree is compiled in place with build files sent to a temporary directory,
-so the repository is not modified.
+Revisions are compiled with `latexmk -pdf` in temporary directories. A revision is exported with `git archive`
+and the working tree is compiled in place with build files sent to a temporary directory, so your repository
+is never modified.
 
-## Web app
+## Self-hosting
 
-`redlatex.web` serves a small upload page: choose the earlier and the revised version of a LaTeX project as
-`.zip` files (the main `.tex` file is auto-detected, or name it) and download the diff PDF.
+The web app is a small [FastAPI](https://fastapi.tiangolo.com/) service. The Docker image bundles TeX Live.
 
-```
-uv sync --extra web
-uv run uvicorn redlatex.web:app
-```
-
-Or with Docker (includes a TeX Live install):
-
-```
+```bash
 docker build -t redlatex .
-docker run -p 10000:10000 redlatex
+docker run -p 10000:10000 redlatex      # then open http://localhost:10000
 ```
 
-Uploads are size-limited, unpacked with path checks, compiled with shell escape off and TeX file access
-restricted to the project (`openin_any=p`), and deleted after the response.
+Without Docker: `uv sync --extra web && uv run uvicorn redlatex.web:app` (needs `latexmk` on `PATH`).
 
-### Deploying to Render
+**Limits and safety.** Uploads are capped at 50 MB per zip (200 MB unpacked, 5000 files) and each version
+gets 180 seconds to compile. Archives are unpacked with path-traversal checks, LaTeX runs with shell escape off
+and with TeX file access restricted to the project (`openin_any=p`, `openout_any=p`), the container runs as a
+non-root user, and temporary files are removed after every request. Compiling is CPU- and memory-heavy and the
+service runs a single worker, so size your instance for the documents and traffic you expect.
 
-1. Create a Render web service from this repository (`render.yaml` is a ready blueprint; Docker runtime).
-2. In the service settings, copy the **Deploy Hook** URL.
-3. In the GitHub repository, add it as the secret `RENDER_DEPLOY_HOOK_URL`.
+### Deploy to Render
 
-`ci.yml` runs the tests and builds the image on every push and pull request; `deploy.yml` triggers the
-Render deploy after CI succeeds on `main`.
+1. Create a Render **Web Service** from your fork; the Docker runtime picks up the `Dockerfile` (`render.yaml`
+   is a ready blueprint). Use at least the Starter instance: compiling LaTeX needs more than 512 MB.
+2. Copy the service's **Deploy Hook** URL and save it as the repository secret `RENDER_DEPLOY_HOOK_URL`.
+3. Turn off Render's own auto-deploy. `ci.yml` tests and builds on every push, and `deploy.yml` calls the hook
+   once CI has passed on `main`.
 
-## How the matching works
+## How it works
 
-Words are extracted from both compiled PDFs and compared with a word-level diff, so the tool sees what a
-reader sees: numbers, resolved references, captions and bibliography entries, not LaTeX source. Body text
-and small print (captions, tables, footnotes) are diffed as separate streams so that a float moving
-elsewhere in the text flow does not look like an edit. Words hyphenated across a line break are joined,
-and page numbers are ignored. Each revised page is paired with the earlier page that shares the most
-matched words (at least 25); earlier pages without a counterpart get a spread of their own. Section
-counts use the PDF bookmarks, so the document should be built with `hyperref`.
+1. Both versions are compiled to PDF (or taken as given).
+2. Words are extracted with [PyMuPDF](https://pymupdf.readthedocs.io/) and compared with a word-level diff.
+3. Body text and small print (captions, tables, footnotes) are diffed as separate streams, so a float landing
+   elsewhere in the flow does not look like an edit. Words hyphenated across a line break are joined and page
+   numbers are ignored.
+4. Each revised page is paired with the earlier page that shares the most matched words (at least 25); earlier
+   pages without a counterpart get a spread of their own.
+5. Section counts use the PDF bookmarks, so build your document with `hyperref`.
 
 ## Limitations
 
 - Changes inside figures that contain no text (plots, photos, drawings) are not detected.
 - Only text is compared; purely visual changes such as colours or spacing are not marked.
-- Appendix sections are lettered only when the LaTeX source of the revised version is readable
-  (a git revision or the working tree) and contains `\appendix`.
-- Compilation is a plain `latexmk -pdf` run; documents needing other engines or special options should be
+- Appendix sections are lettered only when the LaTeX source of the revised version is readable (a git
+  revision, the working tree, or an uploaded zip) and contains `\appendix`.
+- Compilation is a plain `latexmk -pdf` run. Documents that need another engine or special options should be
   compiled by hand and passed with `--old-pdf` / `--new-pdf`.
 
-## Development
+## Contributing
 
-```
-uv sync
-uv run pytest
-```
+Bug reports, test documents that break the matching, and pull requests are welcome. See
+[CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+[MIT](LICENSE)
