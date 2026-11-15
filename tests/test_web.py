@@ -1,6 +1,8 @@
 import io
 import zipfile
 
+import pymupdf
+import pytest
 from fastapi.testclient import TestClient
 
 from redlatex.web import app
@@ -208,3 +210,106 @@ def test_link_preview_meta_and_static_assets():
     assert 'max-age' in client.get('/static/og.png').headers['cache-control']
     imgs = _re.findall(r'src="(/static/[^"]+)"', html)
     assert imgs and all('?v=' in i and client.get(i).status_code == 200 for i in imgs)
+
+
+def _pdf(text='Hello world, the first version of this text.', encrypted=False):
+    with pymupdf.open() as doc:
+        doc.new_page().insert_text((72, 72), text)
+        if encrypted:
+            return doc.tobytes(encryption=pymupdf.PDF_ENCRYPT_AES_256, user_pw='secret', owner_pw='owner')
+        return doc.tobytes()
+
+
+@pytest.fixture
+def pdf_client(monkeypatch):
+    import redlatex.web as web
+    monkeypatch.setattr(web, 'RATE_PER_HOUR', 1000)
+    web.recent.clear()
+    yield client
+    web.recent.clear()
+
+
+def test_pdf_uploads_skip_compilation(pdf_client, monkeypatch):
+    import redlatex.web as web
+    monkeypatch.setattr(web, 'compile_tree', lambda *a, **kw: pytest.fail('PDFs must skip compilation'))
+    r = pdf_client.post('/diff', data={'tex': 'irrelevant.tex'}, files={
+        'old': ('before.PDF', _pdf()),
+        'new': ('after.pdf', _pdf('Hello brave world, the second version of this text.'))})
+    assert r.status_code == 200 and r.content.startswith(b'%PDF'), r.text[:200]
+    with pymupdf.open(stream=r.content, filetype='pdf') as doc:
+        text = ''.join(page.get_text() for page in doc)
+        assert 'before' in text and 'after' in text and 'brave' in text
+
+
+@pytest.mark.parametrize('pdf_side', ['old', 'new'])
+@pytest.mark.parametrize('source_type', ['tex', 'zip'])
+def test_mixed_pdf_and_source(pdf_client, pdf_side, source_type):
+    _need_latexmk()
+    source = _tex('Hello brave world, the second version of this text.')
+    if source_type == 'zip':
+        source = make_zip({'main.tex': source})
+    files = {pdf_side: ('version.pdf', _pdf()),
+             'new' if pdf_side == 'old' else 'old': (f'source.{source_type}', source)}
+    r = pdf_client.post('/diff', files=files)
+    assert r.status_code == 200 and r.content.startswith(b'%PDF'), r.text[:200]
+
+
+@pytest.mark.parametrize('data, message', [(b'not a PDF', 'not a valid PDF'),
+                                         (b'', 'not a valid PDF'),
+                                         (_pdf(encrypted=True), 'password-protected')])
+def test_invalid_pdf_upload(pdf_client, data, message):
+    r = pdf_client.post('/diff', files={'old': ('bad.pdf', data), 'new': ('new.pdf', _pdf())})
+    assert r.status_code == 400 and message in r.text
+
+
+def test_pdf_limits(pdf_client, monkeypatch):
+    import redlatex.web as web
+    files = {'old': ('old.pdf', _pdf()), 'new': ('new.pdf', _pdf())}
+    monkeypatch.setattr(web, 'MAX_PDF_BYTES', 10)
+    assert pdf_client.post('/diff', files=files).status_code == 413
+    monkeypatch.setattr(web, 'MAX_PDF_BYTES', 50 * 1024 * 1024)
+    monkeypatch.setattr(web, 'MAX_PAGES', 0)
+    r = pdf_client.post('/diff', files=files)
+    assert r.status_code == 413 and 'limit is 0' in r.text
+
+
+def test_pdf_background_job(pdf_client, monkeypatch):
+    import time
+    import redlatex.web as web
+    monkeypatch.setattr(web, 'compile_tree', lambda *a, **kw: pytest.fail('PDFs must skip compilation'))
+    r = pdf_client.post('/api/jobs', files={'old': ('old.pdf', _pdf()),
+                                          'new': ('new.pdf', _pdf('Hello revised world.'))})
+    assert r.status_code == 200
+    jid = r.json()['id']
+    for _ in range(200):
+        st = pdf_client.get(f'/api/jobs/{jid}').json()
+        if st['state'] in ('done', 'error'):
+            break
+        time.sleep(0.05)
+    assert st['state'] == 'done', st
+    result = pdf_client.get(f'/api/jobs/{jid}/pdf')
+    assert result.status_code == 200 and result.content.startswith(b'%PDF')
+    assert pdf_client.get(f'/api/jobs/{jid}').status_code == 404
+
+
+def test_each_source_gets_90_seconds(pdf_client, monkeypatch):
+    import redlatex.web as web
+    timeouts = []
+
+    def fake_compile(root, main, out, timeout):
+        timeouts.append(timeout)
+        pdf = root / 'compiled.pdf'
+        pdf.write_bytes(_pdf())
+        return pdf
+
+    monkeypatch.setattr(web, 'compile_tree', fake_compile)
+    r = pdf_client.post('/diff', files={'old': ('old.tex', _tex('old')),
+                                      'new': ('new.tex', _tex('new'))})
+    assert r.status_code == 200
+    assert timeouts == [90, 90]
+
+
+def test_pdf_upload_ui():
+    html = client.get('/').text
+    assert html.count('accept=".pdf,.zip,.tex,application/pdf,application/zip"') == 2
+    assert 'PDFs are compared directly' in html

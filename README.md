@@ -42,11 +42,12 @@ captions and bibliography entries are all compared as the reader sees them.
 ## Use it online
 
 Open **<https://redlatex.onrender.com>**, give it the earlier and the revised version of your document, and
-download the diff PDF. Each version can be a `.zip` of the whole project (with figures, `.bib`, styles), a
+download the diff PDF. Each version can be a `.pdf`, a `.zip` of the whole project (with figures, `.bib`, styles), a
 single `.tex` file, or a branch, tag or commit of a public GitHub repository (Overleaf projects synced to GitHub
 work too; otherwise use Overleaf's *Download → Source* zip). Progress is shown step by step, and your files are
 deleted as soon as the diff is made. See a [sample diff PDF](https://redlatex.onrender.com/static/sample-diff.pdf)
-first if you like. The hosted instance is small; for large projects or private work, run it yourself.
+first if you like. PDFs skip compilation and can be paired with source uploads. The hosted instance is small;
+for large projects or private work, run it yourself.
 
 ## GitHub Action
 
@@ -148,10 +149,10 @@ The web app compiles LaTeX written by strangers, so it is locked down in layers:
 
 | Area | Protection |
 | --- | --- |
-| Compile time | 45 s per version and 90 s for both (`REDLATEX_COMPILE_TIMEOUT`, `REDLATEX_COMPILE_BUDGET`); on timeout the whole process tree is killed. Building the diff gets 90 s (`REDLATEX_RENDER_TIMEOUT`). |
+| Compile time | 90 s per version and 180 s for both (`REDLATEX_COMPILE_TIMEOUT`, `REDLATEX_COMPILE_BUDGET`); on timeout the whole process tree is killed. Building the diff gets 90 s (`REDLATEX_RENDER_TIMEOUT`). |
 | LaTeX sandbox | shell escape off, TeX file access restricted to the project (`openin_any=p`, `openout_any=p`), a minimal environment with no inherited secrets, and CPU, memory and output-file-size limits on the compiler process |
 | GitHub | only `codeload.github.com` is ever contacted; owner, repository and ref names are validated, so the server cannot be pointed at other hosts; downloads are size-limited like uploads |
-| Uploads | `.zip` up to 50 MB (200 MB and 5000 files unpacked) or a `.tex` up to 5 MB; path-traversal and absolute-path checks; oversized requests refused from the `Content-Length` header before they are read |
+| Uploads | `.pdf` up to 50 MB (valid, unlocked PDFs only), `.zip` up to 50 MB (200 MB and 5000 files unpacked) or a `.tex` up to 5 MB; path-traversal and absolute-path checks; oversized requests refused from the `Content-Length` header before they are read |
 | Size | documents are limited to 300 pages (`REDLATEX_MAX_PAGES`) |
 | Abuse | one running diff per client IP, 20 diffs per hour per IP (`REDLATEX_RATE_PER_HOUR`), at most 2 diffs processed at once (`REDLATEX_MAX_JOBS`); jobs from the page wait in a queue of at most 10 for up to 5 minutes, while `POST /diff` waits 20 s before answering 503 |
 | Browser | strict Content-Security-Policy (hash-based, no inline allowances), `nosniff`, no framing, HSTS, no referrer, no third-party requests |

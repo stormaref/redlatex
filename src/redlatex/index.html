@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>redlatex: see what changed in your LaTeX paper</title>
-<meta name="description" content="Free, open-source visual diff for LaTeX. Compare two versions of a paper side by side: changed words in red and green, changed figures framed, moved text ignored, a summary per section. Upload a .zip or .tex, or use a GitHub repo.">
+<meta name="description" content="Free, open-source visual diff for LaTeX. Compare two versions of a paper side by side: changed words in red and green, changed figures framed, moved text ignored, a summary per section. Upload a .pdf, .zip or .tex, or use a GitHub repo.">
 <link rel="canonical" href="{{BASE}}/">
 <meta name="theme-color" content="#0f0e0d">
 <meta property="og:type" content="website">
@@ -105,6 +105,7 @@ footer a{color:inherit}
 .steps{list-style:none;margin:1.1rem 0 0;padding:1rem 1.1rem;border:1px solid var(--line);border-radius:12px;background:var(--bg);display:none}
 .steps.show{display:block}
 .steps li{display:flex;align-items:center;gap:.65rem;padding:.28rem 0;color:var(--muted);font-size:.95rem}
+.steps li[hidden]{display:none}
 .steps li::before{content:"";flex:none;width:.95rem;height:.95rem;border-radius:50%;border:2px solid var(--line)}
 .steps li.active{color:var(--ink);font-weight:600}
 .steps li.active::before{border-color:var(--ink);border-right-color:transparent;animation:s .7s linear infinite}
@@ -158,23 +159,23 @@ section.example{margin-top:4rem}
     <div id="p-upload">
       <div class="drops">
         <label class="drop before" id="d-old">
-          <input type="file" name="old" accept=".zip,.tex,application/zip" aria-label="Earlier version: zip or tex file">
+          <input type="file" name="old" accept=".pdf,.zip,.tex,application/pdf,application/zip" aria-label="Earlier version: pdf, zip or tex file">
           <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4m0 0L7 9m5-5 5 5M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>
           <span class="tag">Before</span>
           <h2>Earlier version</h2>
-          <span class="hint">Drop a .zip project or a single .tex file</span>
+          <span class="hint">Drop a .pdf, .zip project or single .tex file</span>
           <span class="file"></span>
         </label>
         <label class="drop after" id="d-new">
-          <input type="file" name="new" accept=".zip,.tex,application/zip" aria-label="Revised version: zip or tex file">
+          <input type="file" name="new" accept=".pdf,.zip,.tex,application/pdf,application/zip" aria-label="Revised version: pdf, zip or tex file">
           <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4m0 0L7 9m5-5 5 5M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>
           <span class="tag">After</span>
           <h2>Revised version</h2>
-          <span class="hint">Drop a .zip project or a single .tex file</span>
+          <span class="hint">Drop a .pdf, .zip project or single .tex file</span>
           <span class="file"></span>
         </label>
       </div>
-      <p class="note-small">On Overleaf: Menu → Download → Source gives you the .zip.</p>
+      <p class="note-small">PDFs are compared directly. On Overleaf: Menu → Download → Source gives you the .zip.</p>
     </div>
 
     <div id="p-github" hidden>
@@ -192,7 +193,7 @@ section.example{margin-top:4rem}
     <details>
       <summary>Options</summary>
       <div class="opts">
-        <div><label for="tex">Main .tex file <small>(auto-detected)</small></label>
+        <div><label for="tex">Main .tex file <small>(auto-detected; source uploads only)</small></label>
           <input type="text" id="tex" name="tex" placeholder="main.tex" maxlength="200"></div>
         <div><label for="title">Cover title</label>
           <input type="text" id="title" name="title" placeholder="Document changes" maxlength="120"></div>
@@ -216,8 +217,8 @@ section.example{margin-top:4rem}
   </form>
 
   <ol class="how">
-    <li><b>Give us both versions</b>A .zip of the project, a single .tex file, or two refs of a GitHub repo.</li>
-    <li><b>We compile them</b>With latexmk, then compare the words and figures in the PDFs.</li>
+    <li><b>Give us both versions</b>A .pdf, a .zip of the project, a single .tex file, or two refs of a GitHub repo.</li>
+    <li><b>We compare the PDFs</b>Source files are compiled first; uploaded PDFs go straight to word and figure comparison.</li>
     <li><b>Read the changes</b>Red on the left, green on the right, with a summary per section.</li>
   </ol>
   <section class="feats" aria-labelledby="feats-h">
@@ -246,7 +247,7 @@ section.example{margin-top:4rem}
       </article>
     </div>
     <div class="minis">
-      <div class="mini"><b>Any input</b><span>A .zip of the project, a single .tex file, two refs of a public GitHub repo, or an Overleaf source zip.</span></div>
+      <div class="mini"><b>Any input</b><span>A .pdf, a .zip of the project, a single .tex file, two refs of a public GitHub repo, or an Overleaf source zip.</span></div>
       <div class="mini"><b>On every pull request</b><span>The <a href="https://github.com/stormaref/redlatex#github-action">GitHub Action</a> comments a diff PDF on PRs that touch your paper.</span></div>
       <div class="mini"><b>Fast</b><span>Hundreds of pages are compared in seconds; documents up to 300 pages.</span></div>
       <div class="mini"><b>Private and open source</b><span>Files are deleted right after your diff is made. MIT licensed; run it yourself with <code>docker run</code>.</span></div>
@@ -274,7 +275,16 @@ function ready() {
   if (mode === 'upload') return !!(f.old.files.length && f.new.files.length);
   return !!(f.repo.value.trim() && f.old_ref.value.trim() && f.new_ref.value.trim());
 }
-function refresh() { go.disabled = busy || !ready(); }
+function refresh() {
+  go.disabled = busy || !ready();
+  for (const name of ['old', 'new']) {
+    const version = name === 'old' ? 'earlier' : 'revised';
+    const pdf = mode === 'upload' && /\.pdf$/i.test(f[name].files[0]?.name || '');
+    steps.querySelector(`[data-s=fetch-${name}]`).textContent = mode === 'github'
+      ? `Download ${version} version` : `Read ${version} version`;
+    steps.querySelector(`[data-s=compile-${name}]`).hidden = pdf;
+  }
+}
 
 for (const tab of document.querySelectorAll('.tabs button')) {
   tab.addEventListener('click', () => {
@@ -283,8 +293,6 @@ for (const tab of document.querySelectorAll('.tabs button')) {
     for (const t of document.querySelectorAll('.tabs button')) t.setAttribute('aria-selected', t === tab);
     document.getElementById('p-upload').hidden = mode !== 'upload';
     document.getElementById('p-github').hidden = mode !== 'github';
-    steps.querySelector('[data-s=fetch-old]').textContent = mode === 'github' ? 'Download earlier version' : 'Unpack earlier version';
-    steps.querySelector('[data-s=fetch-new]').textContent = mode === 'github' ? 'Download revised version' : 'Unpack revised version';
     refresh();
   });
 }

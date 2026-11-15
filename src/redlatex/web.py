@@ -1,4 +1,4 @@
-"""Web front end: diff two versions of a LaTeX document given as uploads (.zip project or single .tex) or as
+"""Web front end: diff two versions of a document given as uploads (.pdf, .zip project or single .tex) or as
 two refs of a public GitHub repository, with progress reporting."""
 import base64
 import hashlib
@@ -25,11 +25,12 @@ from starlette.background import BackgroundTask
 from .build import compile_tree, run_killing
 
 MAX_ZIP_BYTES = 50 * 1024 * 1024
+MAX_PDF_BYTES = 50 * 1024 * 1024
 MAX_TEX_BYTES = 5 * 1024 * 1024
 MAX_UNPACKED_BYTES = 200 * 1024 * 1024
 MAX_FILES = 5000
-COMPILE_TIMEOUT = int(os.environ.get('REDLATEX_COMPILE_TIMEOUT', 45))     # per version
-COMPILE_BUDGET = int(os.environ.get('REDLATEX_COMPILE_BUDGET', 90))       # both versions together
+COMPILE_TIMEOUT = int(os.environ.get('REDLATEX_COMPILE_TIMEOUT', 90))     # per version
+COMPILE_BUDGET = int(os.environ.get('REDLATEX_COMPILE_BUDGET', 180))      # both versions together
 RENDER_TIMEOUT = int(os.environ.get('REDLATEX_RENDER_TIMEOUT', 90))
 MAX_JOBS = int(os.environ.get('REDLATEX_MAX_JOBS', 2))
 MAX_PAGES = int(os.environ.get('REDLATEX_MAX_PAGES', 300))
@@ -39,7 +40,7 @@ QUEUE_WAIT = 20             # seconds the synchronous /diff endpoint waits for a
 JOB_QUEUE_WAIT = 300        # seconds a background job waits for a slot
 JOB_TTL = 15 * 60           # finished jobs and their files are dropped after this
 GITHUB_TIMEOUT = 30
-MAX_BODY = 2 * MAX_ZIP_BYTES + (1 << 20)
+MAX_BODY = 2 * max(MAX_ZIP_BYTES, MAX_PDF_BYTES) + (1 << 20)
 
 active = set()
 active_lock = threading.Lock()
@@ -147,14 +148,21 @@ def read_stream(chunks, dest_file, limit, label):
 
 
 def unpack(upload, dest):
-    """Store an upload in `dest` and return (project root, is_single_file).
+    """Store an upload in `dest` and return (project root or PDF path, is_single_file).
 
-    A .zip is extracted safely (a lone top folder is unwrapped); a single .tex file is used as is.
+    A .zip is extracted safely (a lone top folder is unwrapped); .tex and .pdf files are stored as is.
     """
     dest.parent.mkdir(parents=True, exist_ok=True)
     raw = dest.with_suffix('.upload')
-    read_stream(iter(lambda: upload.file.read(1 << 20), b''), raw, MAX_ZIP_BYTES, upload.filename)
     try:
+        is_pdf = (upload.filename or '').lower().endswith('.pdf')
+        read_stream(iter(lambda: upload.file.read(1 << 20), b''), raw,
+                    MAX_PDF_BYTES if is_pdf else MAX_ZIP_BYTES, upload.filename)
+        if is_pdf:
+            pdf = dest.with_suffix('.pdf')
+            shutil.copyfile(raw, pdf)
+            validate_pdf(pdf, upload.filename)
+            return pdf, True
         if zipfile.is_zipfile(raw):
             return extract_zip(raw, dest, upload.filename), False
         if (upload.filename or '').lower().endswith('.tex'):
@@ -164,9 +172,25 @@ def unpack(upload, dest):
             dest.mkdir()
             shutil.copyfile(raw, dest / name)
             return dest, True
-        raise HTTPException(400, f'{upload.filename}: upload a .zip of the project or a single .tex file')
+        raise HTTPException(400, f'{upload.filename}: upload a .pdf, a .zip of the project or a single .tex file')
     finally:
         raw.unlink(missing_ok=True)
+
+
+def validate_pdf(pdf, name):
+    """Reject unreadable, encrypted, empty and oversized PDFs with a useful error."""
+    try:
+        with pymupdf.open(pdf) as doc:
+            if not doc.is_pdf:
+                raise HTTPException(400, f'{name}: not a valid PDF file')
+            if doc.needs_pass:
+                raise HTTPException(400, f'{name}: password-protected PDFs are not supported; upload an unlocked copy')
+            if not doc.page_count:
+                raise HTTPException(400, f'{name}: PDF has no pages')
+            if doc.page_count > MAX_PAGES:
+                raise HTTPException(413, f'{name} version has {doc.page_count} pages; the limit is {MAX_PAGES}')
+    except (pymupdf.FileDataError, RuntimeError, ValueError):
+        raise HTTPException(400, f'{name}: not a valid PDF file')
 
 
 def extract_zip(zpath, dest, label):
@@ -290,13 +314,17 @@ def label(name, fallback):
 
 
 def build_diff(work, sources, tex, title, labels, progress):
-    """Compile both versions and build the diff PDF in `work`; `sources` are callables returning
-    (root, single). Returns the output path; raises HTTPException with a user-facing message."""
+    """Compile source versions, use uploaded PDFs directly, then build the diff in `work`.
+
+    `sources` return (project root or PDF path, single)."""
     deadline = time.monotonic() + COMPILE_BUDGET
     pdfs, new_source = [], None
     for name, get in zip(('old', 'new'), sources):
         progress(f'fetch-{name}')
         root, single = get()
+        if root.is_file():
+            pdfs.append(root)
+            continue
         main = find_main(root, tex, single)
         if name == 'new':
             new_source = (root / main).read_text(errors='ignore')
@@ -309,9 +337,7 @@ def build_diff(work, sources, tex, title, labels, progress):
         except SystemExit as e:
             raise HTTPException(422, f'{"earlier" if name == "old" else "revised"} version: {e}')
     for name, pdf in zip(('earlier', 'revised'), pdfs):
-        with pymupdf.open(pdf) as doc:
-            if doc.page_count > MAX_PAGES:
-                raise HTTPException(413, f'{name} version has {doc.page_count} pages; the limit is {MAX_PAGES}')
+        validate_pdf(pdf, name)
     progress('diff')
     out = work / 'redlatex-diff.pdf'
     (work / 'new-source.tex').write_text(new_source or '')
